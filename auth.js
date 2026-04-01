@@ -31,13 +31,30 @@
     let supabaseClient = null;
     let currentUser = null;
 
+    function getProfileDisplayName(user) {
+        if (!user) return null;
+        return (
+            user.user_metadata?.atchess_display_name ||
+            user.user_metadata?.display_name ||
+            user.user_metadata?.full_name ||
+            user.user_metadata?.name ||
+            user.email ||
+            'Player'
+        );
+    }
+
+    function getProfileAvatarUrl(user) {
+        if (!user) return '';
+        return user.user_metadata?.atchess_avatar_url || user.user_metadata?.avatar_url || '';
+    }
+
     function buildProfile(user) {
         if (!user) return null;
         return {
             id: user.id,
             email: user.email || '',
-            displayName: user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'Player',
-            avatarUrl: user.user_metadata?.avatar_url || ''
+            displayName: getProfileDisplayName(user),
+            avatarUrl: getProfileAvatarUrl(user)
         };
     }
 
@@ -57,12 +74,12 @@
 
     function describeUser(user) {
         if (!user) return null;
-        return user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'Signed In';
+        return getProfileDisplayName(user) || 'Signed In';
     }
 
     function fillProfileInputs(user) {
-        if (authDisplayNameInput) authDisplayNameInput.value = user?.user_metadata?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name || '';
-        if (authAvatarUrlInput) authAvatarUrlInput.value = user?.user_metadata?.avatar_url || '';
+        if (authDisplayNameInput) authDisplayNameInput.value = user ? getProfileDisplayName(user) : '';
+        if (authAvatarUrlInput) authAvatarUrlInput.value = user ? getProfileAvatarUrl(user) : '';
     }
 
     function formatHistoryDate(value) {
@@ -287,8 +304,8 @@
         setButtonBusy(authSaveProfileBtn, true, 'Saving...', 'Save Profile');
         const { data, error } = await supabaseClient.auth.updateUser({
             data: {
-                display_name: displayName || currentUser.email || 'Player',
-                avatar_url: avatarUrl || null
+                atchess_display_name: displayName || currentUser.email || 'Player',
+                atchess_avatar_url: avatarUrl || null
             }
         });
         setButtonBusy(authSaveProfileBtn, false, 'Saving...', 'Save Profile');
