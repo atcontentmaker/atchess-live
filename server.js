@@ -13,7 +13,7 @@ try {
 
 const PORT = Number(process.env.PORT || 3000);
 const SITE_NAME = 'ATChess Live';
-const DISCONNECT_GRACE_MS = 10_000;
+const DISCONNECT_GRACE_MS = 25_000;
 const HTTP_RATE_LIMIT_WINDOW_MS = 60_000;
 const HTTP_RATE_LIMIT_MAX = 240;
 const ROOM_CODE_LENGTH = 8;
