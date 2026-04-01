@@ -101,7 +101,7 @@ function applyFallbackSecurityHeaders(req, res, next) {
         'Content-Security-Policy',
         [
             "default-src 'self'",
-            "script-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' https://cdnjs.cloudflare.com",
             "script-src-attr 'unsafe-inline'",
             "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com https://cdnjs.cloudflare.com",
             "style-src-attr 'unsafe-inline'",
@@ -123,7 +123,7 @@ if (helmet) {
             contentSecurityPolicy: {
                 directives: {
                     defaultSrc: ["'self'"],
-                    scriptSrc: ["'self'", "'unsafe-inline'", 'https://cdnjs.cloudflare.com'],
+                    scriptSrc: ["'self'", "'unsafe-inline'", "'unsafe-eval'", "'wasm-unsafe-eval'", 'https://cdnjs.cloudflare.com'],
                     scriptSrcAttr: ["'unsafe-inline'"],
                     styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com', 'https://cdnjs.cloudflare.com'],
                     styleSrcAttr: ["'unsafe-inline'"],
