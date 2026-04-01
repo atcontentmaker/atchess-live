@@ -226,9 +226,24 @@ function createSeat(color, socket, deviceId) {
         connected: true,
         deviceId: String(deviceId || '').trim() || null,
         reconnectToken: randomToken(18),
+        profile: null,
         disconnectedAt: null,
         disconnectDeadline: null,
         disconnectTimer: null
+    };
+}
+
+function sanitizeProfile(profile) {
+    if (!profile || typeof profile !== 'object') return null;
+    const displayName = typeof profile.displayName === 'string' ? profile.displayName.trim().slice(0, 30) : '';
+    const avatarUrl = typeof profile.avatarUrl === 'string' ? profile.avatarUrl.trim().slice(0, 500) : '';
+    const email = typeof profile.email === 'string' ? profile.email.trim().slice(0, 120) : '';
+    const userId = typeof profile.userId === 'string' ? profile.userId.trim().slice(0, 120) : '';
+    return {
+        displayName: displayName || 'Guest',
+        avatarUrl: avatarUrl || null,
+        email: email || null,
+        userId: userId || null
     };
 }
 
@@ -301,7 +316,8 @@ function getSeatPublicState(seat) {
         occupied: true,
         connected: !!seat.connected,
         pendingReconnect: !seat.connected && msToForfeit > 0,
-        msToForfeit
+        msToForfeit,
+        profile: seat.profile || null
     };
 }
 
@@ -412,13 +428,14 @@ function releaseSeat(room, color, allowReconnect) {
     scheduleSeatForfeit(room, color);
 }
 
-function reclaimSeat(room, color, socket) {
+function reclaimSeat(room, color, socket, profile) {
     const seat = room.players[color];
     if (!seat) return null;
 
     clearSeatState(seat);
     seat.connected = true;
     seat.socketId = socket.id;
+    if (profile) seat.profile = profile;
     room.sockets.add(socket.id);
     socket.join(room.id);
     return seat;
@@ -430,7 +447,7 @@ function findSeatBySocket(room, socketId) {
     return null;
 }
 
-function tryReclaimSeat(room, socket, deviceId, reconnectToken) {
+function tryReclaimSeat(room, socket, deviceId, reconnectToken, profile) {
     if (!deviceId || !reconnectToken) return null;
 
     for (const color of ['white', 'black']) {
@@ -438,7 +455,7 @@ function tryReclaimSeat(room, socket, deviceId, reconnectToken) {
         if (!seat) continue;
         if (seat.deviceId !== deviceId) continue;
         if (seat.reconnectToken !== reconnectToken) continue;
-        return reclaimSeat(room, color, socket);
+        return reclaimSeat(room, color, socket, profile);
     }
 
     return null;
@@ -502,13 +519,14 @@ io.use((socket, next) => {
 });
 
 io.on('connection', (socket) => {
-    socket.on('create_room', ({ timeControlMs, deviceId } = {}, callback = () => {}) => {
+    socket.on('create_room', ({ timeControlMs, deviceId, profile } = {}, callback = () => {}) => {
         if (!allowSocketAction(socket, 'create_room', 8, 60_000, callback)) return;
 
         const roomId = generateUniqueRoomId();
         const initialTime = typeof timeControlMs === 'number' ? timeControlMs : 300000;
         const room = createRoom(roomId, initialTime);
         const seat = createSeat('white', socket, deviceId);
+        seat.profile = sanitizeProfile(profile);
 
         room.players.white = seat;
         room.sockets.add(socket.id);
@@ -525,7 +543,7 @@ io.on('connection', (socket) => {
         emitRoomState(roomId);
     });
 
-    socket.on('join_room', ({ roomId, preferredColor, deviceId, reconnectToken } = {}, callback = () => {}) => {
+    socket.on('join_room', ({ roomId, preferredColor, deviceId, reconnectToken, profile } = {}, callback = () => {}) => {
         if (!allowSocketAction(socket, 'join_room', 20, 60_000, callback)) return;
         if (!roomId) {
             callback({ ok: false, error: 'Missing room id.' });
@@ -534,30 +552,35 @@ io.on('connection', (socket) => {
 
         const normalizedId = String(roomId).trim().toUpperCase();
         const room = rooms.get(normalizedId);
+        const sanitizedProfile = sanitizeProfile(profile);
         if (!room) {
             callback({ ok: false, error: 'Room not found.' });
             return;
         }
 
         let assignedColor = 'spectator';
-        let seat = tryReclaimSeat(room, socket, String(deviceId || '').trim(), String(reconnectToken || '').trim());
+        let seat = tryReclaimSeat(room, socket, String(deviceId || '').trim(), String(reconnectToken || '').trim(), sanitizedProfile);
 
         if (seat) {
             assignedColor = seat.color;
         } else if (preferredColor === 'black' && !room.players.black) {
             seat = createSeat('black', socket, deviceId);
+            seat.profile = sanitizedProfile;
             room.players.black = seat;
             assignedColor = 'black';
         } else if (preferredColor === 'white' && !room.players.white) {
             seat = createSeat('white', socket, deviceId);
+            seat.profile = sanitizedProfile;
             room.players.white = seat;
             assignedColor = 'white';
         } else if (!room.players.white) {
             seat = createSeat('white', socket, deviceId);
+            seat.profile = sanitizedProfile;
             room.players.white = seat;
             assignedColor = 'white';
         } else if (!room.players.black) {
             seat = createSeat('black', socket, deviceId);
+            seat.profile = sanitizedProfile;
             room.players.black = seat;
             assignedColor = 'black';
         }

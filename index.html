@@ -645,6 +645,11 @@
             flex-direction: column;
             gap: 10px;
         }
+        .auth-profile-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px;
+        }
         .auth-input {
             width: 100%;
             padding: 12px 14px;
@@ -654,6 +659,56 @@
             color: var(--text-1);
             font-size: 14px;
         }
+        .player-avatar {
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+        }
+        .player-avatar.has-photo {
+            color: transparent;
+            text-shadow: none;
+        }
+        .match-history-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            max-height: 180px;
+            overflow-y: auto;
+        }
+        .match-history-item {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: var(--surface-3);
+            display: flex;
+            justify-content: space-between;
+            gap: 12px;
+            align-items: center;
+        }
+        .match-history-meta {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .match-history-opponent {
+            color: var(--text-1);
+            font-size: 13px;
+            font-weight: 700;
+        }
+        .match-history-detail {
+            color: var(--text-2);
+            font-size: 11px;
+        }
+        .match-history-result {
+            font-size: 11px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-weight: 800;
+            white-space: nowrap;
+        }
+        .match-history-result.win { color: #81c995; }
+        .match-history-result.loss { color: #e57373; }
+        .match-history-result.draw { color: #f6c90e; }
         .auth-divider {
             display: flex;
             align-items: center;
@@ -1052,7 +1107,7 @@
         <!-- Top player (Black / AI) -->
         <div class="player-strip" id="black-player-strip">
             <div class="player-info">
-                <div class="player-avatar black-av">&#9823;</div>
+                    <div class="player-avatar black-av" id="black-player-avatar">&#9823;</div>
                 <div class="player-details">
                     <div class="player-name" id="black-player-name">Stockfish</div>
                     <div class="player-rating" id="black-player-rating">Engine</div>
@@ -1072,7 +1127,7 @@
         <!-- Bottom player (White / Human) -->
         <div class="player-strip" id="white-player-strip">
             <div class="player-info">
-                <div class="player-avatar white-av">&#9817;</div>
+                    <div class="player-avatar white-av" id="white-player-avatar">&#9817;</div>
                 <div class="player-details">
                     <div class="player-name" id="white-player-name">You</div>
                     <div class="player-rating" id="white-player-rating">Human</div>
@@ -1187,6 +1242,11 @@
             <button class="auth-close" type="button" onclick="closeAuthModal()">&times;</button>
         </div>
         <div class="auth-helper">Use email OTP or continue with Google. This is powered by Supabase Auth so you do not need to build mail delivery yourself.</div>
+        <div class="auth-profile-grid">
+            <input class="auth-input" id="auth-display-name-input" type="text" maxlength="30" placeholder="Username">
+            <input class="auth-input" id="auth-avatar-url-input" type="url" placeholder="Profile photo URL">
+        </div>
+        <button class="auth-btn-secondary" id="auth-save-profile-btn" type="button">Save Profile</button>
         <div class="auth-stack">
             <input class="auth-input" id="auth-email-input" type="email" placeholder="you@example.com" autocomplete="email">
             <button class="auth-btn-primary" id="auth-send-otp-btn" type="button">Send OTP</button>
@@ -1197,6 +1257,10 @@
         <button class="auth-btn-secondary" id="auth-google-btn" type="button">Continue with Google</button>
         <div class="auth-status-line" id="auth-status-line">Auth is optional. You can keep playing as a guest.</div>
         <div class="auth-note" id="auth-config-note">Fill in <code>auth-config.js</code> with your Supabase project URL and anon key, then enable Google in the Supabase dashboard.</div>
+        <div class="auth-divider">history</div>
+        <div class="match-history-list" id="match-history-list">
+            <div class="auth-note" id="match-history-empty">Sign in to load account match history.</div>
+        </div>
     </div>
 </div>
 
@@ -1313,16 +1377,13 @@ function updatePlayerLabels() {
     if (currentMode === 'online') {
         const whiteSeat = onlineRoomState?.players?.white || {};
         const blackSeat = onlineRoomState?.players?.black || {};
+        const currentName = getProfileDisplayName(currentAuthProfile);
         const whiteName = onlinePlayerColor === 'white'
-            ? 'You'
-            : onlinePlayerColor === 'spectator'
-                ? 'White Player'
-                : 'Opponent';
+            ? (currentName || 'You')
+            : (whiteSeat.profile?.displayName || (onlinePlayerColor === 'spectator' ? 'White Player' : 'Opponent'));
         const blackName = onlinePlayerColor === 'black'
-            ? 'You'
-            : onlinePlayerColor === 'spectator'
-                ? 'Black Player'
-                : 'Opponent';
+            ? (currentName || 'You')
+            : (blackSeat.profile?.displayName || (onlinePlayerColor === 'spectator' ? 'Black Player' : 'Opponent'));
         const describeSeat = (color, seat, isYou) => {
             if (!seat?.occupied) return `${color} · Open`;
             if (seat.connected) return isYou ? `Online · ${color}` : `${color} · Online`;
@@ -1333,13 +1394,17 @@ function updatePlayerLabels() {
         if (blackPlayerNameElement) blackPlayerNameElement.textContent = blackName;
         if (whitePlayerRatingElement) whitePlayerRatingElement.textContent = describeSeat('White', whiteSeat, onlinePlayerColor === 'white');
         if (blackPlayerRatingElement) blackPlayerRatingElement.textContent = describeSeat('Black', blackSeat, onlinePlayerColor === 'black');
+        applyPlayerAvatar(whitePlayerAvatarElement, onlinePlayerColor === 'white' ? currentAuthProfile?.avatarUrl : whiteSeat.profile?.avatarUrl, getDefaultAvatarGlyph('white'));
+        applyPlayerAvatar(blackPlayerAvatarElement, onlinePlayerColor === 'black' ? currentAuthProfile?.avatarUrl : blackSeat.profile?.avatarUrl, getDefaultAvatarGlyph('black'));
         return;
     }
 
-    if (whitePlayerNameElement) whitePlayerNameElement.textContent = 'You';
-    if (whitePlayerRatingElement) whitePlayerRatingElement.textContent = 'Human';
+    if (whitePlayerNameElement) whitePlayerNameElement.textContent = getProfileDisplayName(currentAuthProfile) || 'You';
+    if (whitePlayerRatingElement) whitePlayerRatingElement.textContent = currentAuthProfile ? 'Signed In' : 'Human';
     if (blackPlayerNameElement) blackPlayerNameElement.textContent = 'Stockfish';
     if (blackPlayerRatingElement) blackPlayerRatingElement.textContent = 'Engine';
+    applyPlayerAvatar(whitePlayerAvatarElement, currentAuthProfile?.avatarUrl, getDefaultAvatarGlyph('white'));
+    applyPlayerAvatar(blackPlayerAvatarElement, null, getDefaultAvatarGlyph('black'));
 }
 
 function updateModeUI() {
@@ -1375,6 +1440,7 @@ function getHumanColorCode() {
 function resetOutcomeAnimationState() {
     lastOutcomeAnimation = null;
     humanResignedThisGame = false;
+    lastRecordedMatchKey = null;
 }
 
 function triggerHumanOutcomeAnimation(kind) {
@@ -1393,20 +1459,28 @@ function updateHumanOutcomeAnimation() {
     if (!humanColor) return;
 
     if (resigned) {
+        maybeRecordMatchHistory();
         triggerHumanOutcomeAnimation(humanResignedThisGame ? 'resign' : 'victory');
         return;
     }
     if (timeoutWinner) {
+        maybeRecordMatchHistory();
         triggerHumanOutcomeAnimation(timeoutWinner.charAt(0) === humanColor ? 'victory' : 'defeated');
         return;
     }
     if (game.in_checkmate()) {
+        maybeRecordMatchHistory();
         const winner = game.turn() === 'w' ? 'b' : 'w';
         triggerHumanOutcomeAnimation(winner === humanColor ? 'victory' : 'defeated');
         return;
     }
     if (game.in_stalemate()) {
+        maybeRecordMatchHistory();
         triggerHumanOutcomeAnimation('stalemate');
+        return;
+    }
+    if (game.in_draw()) {
+        maybeRecordMatchHistory();
     }
 }
 
@@ -1548,7 +1622,11 @@ function createOnlineRoom() {
         return;
     }
     if (onlineRoomId) socketClient.emit('leave_room', { roomId: onlineRoomId });
-    socketClient.emit('create_room', { timeControlMs: getSelectedTimeControlMs(), deviceId: getPersistentDeviceId() }, (response) => {
+    socketClient.emit('create_room', {
+        timeControlMs: getSelectedTimeControlMs(),
+        deviceId: getPersistentDeviceId(),
+        profile: getCurrentPlayerProfileForRoom()
+    }, (response) => {
         if (!response?.ok) {
             setOnlineStatus(response?.error || 'Could not create room.');
             return;
@@ -1573,7 +1651,9 @@ function joinOnlineRoom() {
         return;
     }
     if (onlineRoomId) socketClient.emit('leave_room', { roomId: onlineRoomId });
-    socketClient.emit('join_room', buildJoinRoomPayload(roomId), (response) => {
+    const joinPayload = buildJoinRoomPayload(roomId);
+    joinPayload.profile = getCurrentPlayerProfileForRoom();
+    socketClient.emit('join_room', joinPayload, (response) => {
         if (!response?.ok) {
             setOnlineStatus(response?.error || 'Could not join room.');
             return;
@@ -1667,6 +1747,8 @@ const onlineStatusElement = document.getElementById('online-status');
 const whiteClockElement = document.getElementById('white-clock');
 const blackClockElement = document.getElementById('black-clock');
 const boardColumnElement = document.querySelector('.board-column');
+const whitePlayerAvatarElement = document.getElementById('white-player-avatar');
+const blackPlayerAvatarElement = document.getElementById('black-player-avatar');
 const whitePlayerNameElement = document.getElementById('white-player-name');
 const whitePlayerRatingElement = document.getElementById('white-player-rating');
 const blackPlayerNameElement = document.getElementById('black-player-name');
@@ -1698,6 +1780,93 @@ let reconnectAttemptInFlight = false;
 let lastAppliedOnlinePGN = '';
 let lastOutcomeAnimation = null;
 let humanResignedThisGame = false;
+let currentAuthProfile = null;
+let lastRecordedMatchKey = null;
+
+function getDefaultAvatarGlyph(color) {
+    return color === 'white' ? '\u2659' : '\u265F';
+}
+
+function applyPlayerAvatar(element, avatarUrl, fallbackGlyph) {
+    if (!element) return;
+    if (avatarUrl) {
+        element.style.backgroundImage = `url("${avatarUrl.replace(/"/g, '&quot;')}")`;
+        element.classList.add('has-photo');
+        element.textContent = fallbackGlyph;
+        return;
+    }
+    element.style.backgroundImage = '';
+    element.classList.remove('has-photo');
+    element.textContent = fallbackGlyph;
+}
+
+function getProfileDisplayName(profile) {
+    if (!profile) return null;
+    return profile.displayName || profile.username || profile.email || null;
+}
+
+function getCurrentPlayerProfileForRoom() {
+    return {
+        userId: currentAuthProfile?.id || null,
+        displayName: getProfileDisplayName(currentAuthProfile) || 'Guest',
+        avatarUrl: currentAuthProfile?.avatarUrl || null,
+        email: currentAuthProfile?.email || null
+    };
+}
+
+function computeMatchRecordKey(mode, result, reason) {
+    return [mode, result, reason, game.pgn(), onlineRoomId || 'local'].join('|');
+}
+
+function recordFinishedMatchIfNeeded(mode, result, reason, opponentName) {
+    if (!currentAuthProfile || typeof window.recordMatchHistory !== 'function') return;
+    const recordKey = computeMatchRecordKey(mode, result, reason);
+    if (lastRecordedMatchKey === recordKey) return;
+    lastRecordedMatchKey = recordKey;
+    window.recordMatchHistory({
+        mode,
+        result,
+        reason,
+        opponentName,
+        playerColor: getHumanColorCode() === 'b' ? 'black' : 'white',
+        pgn: game.pgn(),
+        fen: game.fen()
+    });
+}
+
+function maybeRecordMatchHistory() {
+    const humanColor = getHumanColorCode();
+    if (!humanColor) return;
+
+    const mode = currentMode === 'online' ? 'online' : 'engine';
+    const opponentName = currentMode === 'online'
+        ? (humanColor === 'w'
+            ? (onlineRoomState?.players?.black?.profile?.displayName || 'Opponent')
+            : (onlineRoomState?.players?.white?.profile?.displayName || 'Opponent'))
+        : 'Stockfish';
+
+    if (resigned) {
+        recordFinishedMatchIfNeeded(mode, humanResignedThisGame ? 'loss' : 'win', 'resignation', opponentName);
+        return;
+    }
+    if (timeoutWinner) {
+        recordFinishedMatchIfNeeded(mode, timeoutWinner.charAt(0) === humanColor ? 'win' : 'loss', 'timeout', opponentName);
+        return;
+    }
+    if (game.in_checkmate()) {
+        const winner = game.turn() === 'w' ? 'b' : 'w';
+        recordFinishedMatchIfNeeded(mode, winner === humanColor ? 'win' : 'loss', 'checkmate', opponentName);
+        return;
+    }
+    if (game.in_stalemate() || game.in_draw()) {
+        recordFinishedMatchIfNeeded(mode, 'draw', game.in_stalemate() ? 'stalemate' : 'draw', opponentName);
+    }
+}
+
+window.addEventListener('atchess-auth-changed', (event) => {
+    currentAuthProfile = event.detail || null;
+    updatePlayerLabels();
+});
 
 function isTimerEnabled() {
     return parseInt(timeControlSelect?.value || '0', 10) > 0;

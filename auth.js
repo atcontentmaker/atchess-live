@@ -17,14 +17,33 @@
     const authConfigNote = document.getElementById('auth-config-note');
     const authEmailInput = document.getElementById('auth-email-input');
     const authOtpInput = document.getElementById('auth-otp-input');
+    const authDisplayNameInput = document.getElementById('auth-display-name-input');
+    const authAvatarUrlInput = document.getElementById('auth-avatar-url-input');
     const authSendOtpBtn = document.getElementById('auth-send-otp-btn');
     const authVerifyOtpBtn = document.getElementById('auth-verify-otp-btn');
+    const authSaveProfileBtn = document.getElementById('auth-save-profile-btn');
     const authGoogleBtn = document.getElementById('auth-google-btn');
     const authSignoutBtn = document.getElementById('auth-signout-btn');
     const authOpenBtn = document.getElementById('auth-open-btn');
+    const matchHistoryList = document.getElementById('match-history-list');
+    const matchHistoryEmpty = document.getElementById('match-history-empty');
 
     let supabaseClient = null;
     let currentUser = null;
+
+    function buildProfile(user) {
+        if (!user) return null;
+        return {
+            id: user.id,
+            email: user.email || '',
+            displayName: user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'Player',
+            avatarUrl: user.user_metadata?.avatar_url || ''
+        };
+    }
+
+    function emitAuthProfile(user) {
+        window.dispatchEvent(new CustomEvent('atchess-auth-changed', { detail: buildProfile(user) }));
+    }
 
     function setAuthStatus(message) {
         if (authStatusLine) authStatusLine.textContent = message;
@@ -38,7 +57,69 @@
 
     function describeUser(user) {
         if (!user) return null;
-        return user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'Signed In';
+        return user.user_metadata?.display_name || user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'Signed In';
+    }
+
+    function fillProfileInputs(user) {
+        if (authDisplayNameInput) authDisplayNameInput.value = user?.user_metadata?.display_name || user?.user_metadata?.full_name || user?.user_metadata?.name || '';
+        if (authAvatarUrlInput) authAvatarUrlInput.value = user?.user_metadata?.avatar_url || '';
+    }
+
+    function formatHistoryDate(value) {
+        try {
+            return new Date(value).toLocaleString();
+        } catch (_error) {
+            return 'Recently';
+        }
+    }
+
+    function renderMatchHistory(rows) {
+        if (!matchHistoryList) return;
+        matchHistoryList.innerHTML = '';
+
+        if (!rows || !rows.length) {
+            const empty = document.createElement('div');
+            empty.className = 'auth-note';
+            empty.textContent = currentUser ? 'No saved matches yet.' : 'Sign in to load account match history.';
+            matchHistoryList.appendChild(empty);
+            return;
+        }
+
+        rows.forEach((row) => {
+            const item = document.createElement('div');
+            item.className = 'match-history-item';
+            const resultClass = row.result === 'win' ? 'win' : row.result === 'loss' ? 'loss' : 'draw';
+            item.innerHTML = `
+                <div class="match-history-meta">
+                    <div class="match-history-opponent">${row.opponent_name || 'Unknown Opponent'}</div>
+                    <div class="match-history-detail">${(row.mode || 'game').toUpperCase()} · ${(row.reason || 'result').toUpperCase()} · ${formatHistoryDate(row.played_at)}</div>
+                </div>
+                <div class="match-history-result ${resultClass}">${row.result || 'draw'}</div>
+            `;
+            matchHistoryList.appendChild(item);
+        });
+    }
+
+    async function loadMatchHistory() {
+        if (!supabaseClient || !currentUser) {
+            renderMatchHistory([]);
+            return;
+        }
+
+        const { data, error } = await supabaseClient
+            .from('match_history')
+            .select('played_at, mode, result, reason, opponent_name')
+            .eq('user_id', currentUser.id)
+            .order('played_at', { ascending: false })
+            .limit(10);
+
+        if (error) {
+            renderMatchHistory([]);
+            setAuthStatus('Signed in. Match history table is not ready yet.');
+            return;
+        }
+
+        renderMatchHistory(data || []);
     }
 
     function updateAuthUI() {
@@ -49,6 +130,8 @@
             authSubtitleLine.textContent = 'Add your Supabase project URL and anon key in auth-config.js to enable email OTP and Google sign-in.';
             authSignoutBtn.disabled = true;
             if (authGoogleBtn) authGoogleBtn.disabled = true;
+            if (authSaveProfileBtn) authSaveProfileBtn.disabled = true;
+            renderMatchHistory([]);
             return;
         }
 
@@ -57,12 +140,15 @@
             authSubtitleLine.textContent = currentUser.email ? `Signed in as ${currentUser.email}` : 'Signed in';
             authOpenBtn.textContent = 'Manage Account';
             authSignoutBtn.disabled = false;
+            if (authSaveProfileBtn) authSaveProfileBtn.disabled = false;
         } else {
             authTitleLine.textContent = 'Guest Mode';
             authSubtitleLine.textContent = 'Create an account with email OTP or Google so we can attach identity to your profile later.';
             authOpenBtn.textContent = 'Create / Sign In';
             authSignoutBtn.disabled = true;
+            if (authSaveProfileBtn) authSaveProfileBtn.disabled = true;
         }
+        fillProfileInputs(currentUser);
     }
 
     async function handleSession() {
@@ -74,6 +160,8 @@
         }
         currentUser = data?.user || null;
         updateAuthUI();
+        emitAuthProfile(currentUser);
+        await loadMatchHistory();
         if (currentUser) {
             setAuthStatus(`Signed in as ${currentUser.email || describeUser(currentUser)}.`);
         }
@@ -104,7 +192,26 @@
         }
         currentUser = null;
         updateAuthUI();
+        emitAuthProfile(null);
+        renderMatchHistory([]);
         setAuthStatus('Signed out.');
+    };
+
+    window.recordMatchHistory = async function (payload) {
+        if (!supabaseClient || !currentUser || !payload) return;
+        const { error } = await supabaseClient.from('match_history').insert({
+            user_id: currentUser.id,
+            mode: payload.mode || 'engine',
+            result: payload.result || 'draw',
+            reason: payload.reason || 'draw',
+            opponent_name: payload.opponentName || 'Unknown Opponent',
+            player_color: payload.playerColor || 'white',
+            pgn: payload.pgn || '',
+            fen: payload.fen || ''
+        });
+        if (!error) {
+            await loadMatchHistory();
+        }
     };
 
     async function sendOtp() {
@@ -162,8 +269,39 @@
 
         currentUser = data?.user || null;
         updateAuthUI();
+        emitAuthProfile(currentUser);
+        await loadMatchHistory();
         setAuthStatus('Email verified. You are signed in.');
         window.closeAuthModal();
+    }
+
+    async function saveProfile() {
+        if (!supabaseClient || !currentUser) {
+            setAuthStatus('Sign in before saving a profile.');
+            return;
+        }
+
+        const displayName = authDisplayNameInput?.value?.trim();
+        const avatarUrl = authAvatarUrlInput?.value?.trim();
+
+        setButtonBusy(authSaveProfileBtn, true, 'Saving...', 'Save Profile');
+        const { data, error } = await supabaseClient.auth.updateUser({
+            data: {
+                display_name: displayName || currentUser.email || 'Player',
+                avatar_url: avatarUrl || null
+            }
+        });
+        setButtonBusy(authSaveProfileBtn, false, 'Saving...', 'Save Profile');
+
+        if (error) {
+            setAuthStatus(error.message || 'Could not save profile.');
+            return;
+        }
+
+        currentUser = data?.user || currentUser;
+        updateAuthUI();
+        emitAuthProfile(currentUser);
+        setAuthStatus('Profile saved.');
     }
 
     async function signInWithGoogle() {
@@ -209,6 +347,8 @@
         supabaseClient.auth.onAuthStateChange((_event, session) => {
             currentUser = session?.user || null;
             updateAuthUI();
+            emitAuthProfile(currentUser);
+            loadMatchHistory();
         });
 
         await handleSession();
@@ -216,6 +356,7 @@
 
     authSendOtpBtn?.addEventListener('click', sendOtp);
     authVerifyOtpBtn?.addEventListener('click', verifyOtp);
+    authSaveProfileBtn?.addEventListener('click', saveProfile);
     authGoogleBtn?.addEventListener('click', signInWithGoogle);
     authModal?.addEventListener('click', (event) => {
         if (event.target === authModal) window.closeAuthModal();
@@ -235,5 +376,6 @@
     }
 
     updateAuthUI();
+    emitAuthProfile(null);
     initAuth();
 })();
