@@ -19,6 +19,16 @@
     const authOtpInput = document.getElementById('auth-otp-input');
     const authDisplayNameInput = document.getElementById('auth-display-name-input');
     const authAvatarUrlInput = document.getElementById('auth-avatar-url-input');
+    const authAvatarFileInput = document.getElementById('auth-avatar-file-input');
+    const authAvatarUploadBtn = document.getElementById('auth-avatar-upload-btn');
+    const authAvatarCenterBtn = document.getElementById('auth-avatar-center-btn');
+    const authAvatarApplyBtn = document.getElementById('auth-avatar-apply-btn');
+    const authAvatarClearBtn = document.getElementById('auth-avatar-clear-btn');
+    const authCropStage = document.getElementById('auth-crop-stage');
+    const authCropImage = document.getElementById('auth-crop-image');
+    const authCropZoomInput = document.getElementById('auth-crop-zoom');
+    const authCropSizeInput = document.getElementById('auth-crop-size');
+    const authPhotoPreview = document.getElementById('auth-photo-preview');
     const authSendOtpBtn = document.getElementById('auth-send-otp-btn');
     const authVerifyOtpBtn = document.getElementById('auth-verify-otp-btn');
     const authSaveProfileBtn = document.getElementById('auth-save-profile-btn');
@@ -30,6 +40,16 @@
 
     let supabaseClient = null;
     let currentUser = null;
+    let cropSourceUrl = '';
+    let cropImageState = {
+        naturalWidth: 0,
+        naturalHeight: 0,
+        scale: 1,
+        minScale: 1,
+        offsetX: 0,
+        offsetY: 0
+    };
+    let dragState = null;
 
     function getProfileDisplayName(user) {
         if (!user) return null;
@@ -72,6 +92,162 @@
         button.textContent = busy ? busyText : idleText;
     }
 
+    function updatePhotoPreview(url) {
+        if (!authPhotoPreview) return;
+        if (url) {
+            authPhotoPreview.style.backgroundImage = `url("${url.replace(/"/g, '&quot;')}")`;
+            authPhotoPreview.textContent = '';
+            return;
+        }
+        authPhotoPreview.style.backgroundImage = '';
+        authPhotoPreview.textContent = '\u2659';
+    }
+
+    function getCropStageSize() {
+        return authCropStage ? Math.max(1, authCropStage.clientWidth) : 1;
+    }
+
+    function clampCropOffsets() {
+        if (!authCropImage || !cropImageState.naturalWidth || !cropImageState.naturalHeight) return;
+        const stageSize = getCropStageSize();
+        const scaledWidth = cropImageState.naturalWidth * cropImageState.scale;
+        const scaledHeight = cropImageState.naturalHeight * cropImageState.scale;
+        const maxOffsetX = Math.max(0, (scaledWidth - stageSize) / 2);
+        const maxOffsetY = Math.max(0, (scaledHeight - stageSize) / 2);
+        cropImageState.offsetX = Math.min(maxOffsetX, Math.max(-maxOffsetX, cropImageState.offsetX));
+        cropImageState.offsetY = Math.min(maxOffsetY, Math.max(-maxOffsetY, cropImageState.offsetY));
+    }
+
+    function renderCropImage() {
+        if (!authCropImage || !cropSourceUrl || !cropImageState.naturalWidth || !cropImageState.naturalHeight) return;
+        clampCropOffsets();
+        authCropImage.style.width = `${cropImageState.naturalWidth * cropImageState.scale}px`;
+        authCropImage.style.height = `${cropImageState.naturalHeight * cropImageState.scale}px`;
+        authCropImage.style.transform = `translate(calc(-50% + ${cropImageState.offsetX}px), calc(-50% + ${cropImageState.offsetY}px))`;
+    }
+
+    function resetCropPosition() {
+        cropImageState.offsetX = 0;
+        cropImageState.offsetY = 0;
+        renderCropImage();
+    }
+
+    function updateCropZoomRange(minScale) {
+        if (!authCropZoomInput) return;
+        authCropZoomInput.min = String(minScale);
+        authCropZoomInput.max = String(Math.max(minScale + 2, minScale * 3));
+        authCropZoomInput.value = String(Math.max(minScale, cropImageState.scale));
+    }
+
+    function loadCropSource(url) {
+        cropSourceUrl = url || '';
+        if (!authCropImage) return;
+        if (!cropSourceUrl) {
+            authCropImage.hidden = true;
+            authCropImage.removeAttribute('src');
+            updatePhotoPreview(authAvatarUrlInput?.value?.trim() || '');
+            return;
+        }
+        authCropImage.onload = function () {
+            const stageSize = getCropStageSize();
+            const naturalWidth = authCropImage.naturalWidth || 1;
+            const naturalHeight = authCropImage.naturalHeight || 1;
+            const minScale = Math.max(stageSize / naturalWidth, stageSize / naturalHeight);
+            cropImageState.naturalWidth = naturalWidth;
+            cropImageState.naturalHeight = naturalHeight;
+            cropImageState.minScale = minScale;
+            cropImageState.scale = minScale;
+            updateCropZoomRange(minScale);
+            resetCropPosition();
+            authCropImage.hidden = false;
+            updatePhotoPreview(cropSourceUrl);
+        };
+        authCropImage.crossOrigin = cropSourceUrl.startsWith('data:image/') ? '' : 'anonymous';
+        authCropImage.src = cropSourceUrl;
+    }
+
+    function exportCroppedAvatar() {
+        if (!cropSourceUrl || !authCropImage || !cropImageState.naturalWidth || !cropImageState.naturalHeight) return null;
+        const outputSize = Math.max(128, parseInt(authCropSizeInput?.value || '512', 10));
+        const stageSize = getCropStageSize();
+        const canvas = document.createElement('canvas');
+        canvas.width = outputSize;
+        canvas.height = outputSize;
+        const ctx = canvas.getContext('2d');
+        if (!ctx) return null;
+
+        const srcX = ((cropImageState.naturalWidth * cropImageState.scale - stageSize) / 2 - cropImageState.offsetX) / cropImageState.scale;
+        const srcY = ((cropImageState.naturalHeight * cropImageState.scale - stageSize) / 2 - cropImageState.offsetY) / cropImageState.scale;
+        const srcSize = stageSize / cropImageState.scale;
+
+        try {
+            ctx.drawImage(
+                authCropImage,
+                Math.max(0, srcX),
+                Math.max(0, srcY),
+                Math.min(cropImageState.naturalWidth, srcSize),
+                Math.min(cropImageState.naturalHeight, srcSize),
+                0,
+                0,
+                outputSize,
+                outputSize
+            );
+            return canvas.toDataURL('image/png');
+        } catch (_error) {
+            setAuthStatus('That image host blocks editing. Upload the file directly or use another image link.');
+            return null;
+        }
+    }
+
+    function applyCroppedAvatarToField() {
+        const cropped = exportCroppedAvatar();
+        if (!cropped || !authAvatarUrlInput) {
+            setAuthStatus('Upload a photo first, then crop it.');
+            return;
+        }
+        authAvatarUrlInput.value = cropped;
+        updatePhotoPreview(cropped);
+        setAuthStatus('Cropped photo ready. Click Save Profile to keep it.');
+    }
+
+    function maybeLoadAvatarUrlForEditing() {
+        const url = authAvatarUrlInput?.value?.trim() || '';
+        updatePhotoPreview(url);
+        if (!url) {
+            clearAvatarEditor();
+            return;
+        }
+        if (url.startsWith('http://') || url.startsWith('https://') || url.startsWith('data:image/')) {
+            loadCropSource(url);
+        }
+    }
+
+    function clearAvatarEditor() {
+        cropSourceUrl = '';
+        cropImageState = {
+            naturalWidth: 0,
+            naturalHeight: 0,
+            scale: 1,
+            minScale: 1,
+            offsetX: 0,
+            offsetY: 0
+        };
+        if (authAvatarFileInput) authAvatarFileInput.value = '';
+        if (authCropImage) {
+            authCropImage.hidden = true;
+            authCropImage.removeAttribute('src');
+            authCropImage.style.width = '';
+            authCropImage.style.height = '';
+            authCropImage.style.transform = 'translate(-50%, -50%)';
+        }
+        if (authCropZoomInput) {
+            authCropZoomInput.min = '1';
+            authCropZoomInput.max = '3';
+            authCropZoomInput.value = '1';
+        }
+        updatePhotoPreview(authAvatarUrlInput?.value?.trim() || '');
+    }
+
     function describeUser(user) {
         if (!user) return null;
         return getProfileDisplayName(user) || 'Signed In';
@@ -80,6 +256,7 @@
     function fillProfileInputs(user) {
         if (authDisplayNameInput) authDisplayNameInput.value = user ? getProfileDisplayName(user) : '';
         if (authAvatarUrlInput) authAvatarUrlInput.value = user ? getProfileAvatarUrl(user) : '';
+        clearAvatarEditor();
     }
 
     function formatHistoryDate(value) {
@@ -318,6 +495,7 @@
         currentUser = data?.user || currentUser;
         updateAuthUI();
         emitAuthProfile(currentUser);
+        clearAvatarEditor();
         setAuthStatus('Profile saved.');
     }
 
@@ -375,6 +553,81 @@
     authVerifyOtpBtn?.addEventListener('click', verifyOtp);
     authSaveProfileBtn?.addEventListener('click', saveProfile);
     authGoogleBtn?.addEventListener('click', signInWithGoogle);
+    authAvatarUploadBtn?.addEventListener('click', () => authAvatarFileInput?.click());
+    authAvatarCenterBtn?.addEventListener('click', () => {
+        if (!cropSourceUrl) {
+            setAuthStatus('Upload a photo first.');
+            return;
+        }
+        resetCropPosition();
+    });
+    authAvatarApplyBtn?.addEventListener('click', applyCroppedAvatarToField);
+    authAvatarClearBtn?.addEventListener('click', () => {
+        if (authAvatarUrlInput) authAvatarUrlInput.value = '';
+        clearAvatarEditor();
+        setAuthStatus('Profile photo cleared. Click Save Profile to remove it from your account.');
+    });
+    authAvatarFileInput?.addEventListener('change', () => {
+        const file = authAvatarFileInput.files?.[0];
+        if (!file) return;
+        if (!file.type.startsWith('image/')) {
+            setAuthStatus('Choose a PNG, JPG, WEBP, or GIF image file.');
+            return;
+        }
+        const reader = new FileReader();
+        reader.onload = () => {
+            loadCropSource(typeof reader.result === 'string' ? reader.result : '');
+            setAuthStatus('Photo loaded. Drag it into place, then click Use Cropped Photo.');
+        };
+        reader.readAsDataURL(file);
+    });
+    authAvatarUrlInput?.addEventListener('input', () => {
+        updatePhotoPreview(authAvatarUrlInput.value.trim());
+    });
+    authAvatarUrlInput?.addEventListener('change', maybeLoadAvatarUrlForEditing);
+    authAvatarUrlInput?.addEventListener('blur', maybeLoadAvatarUrlForEditing);
+    authCropZoomInput?.addEventListener('input', () => {
+        if (!cropSourceUrl) return;
+        cropImageState.scale = Math.max(cropImageState.minScale, parseFloat(authCropZoomInput.value || '1'));
+        renderCropImage();
+    });
+    authCropStage?.addEventListener('pointerdown', (event) => {
+        if (!cropSourceUrl) return;
+        dragState = {
+            pointerId: event.pointerId,
+            startX: event.clientX,
+            startY: event.clientY,
+            originX: cropImageState.offsetX,
+            originY: cropImageState.offsetY
+        };
+        authCropStage.setPointerCapture(event.pointerId);
+        authCropStage.classList.add('dragging');
+    });
+    authCropStage?.addEventListener('pointermove', (event) => {
+        if (!dragState || dragState.pointerId !== event.pointerId) return;
+        cropImageState.offsetX = dragState.originX + (event.clientX - dragState.startX);
+        cropImageState.offsetY = dragState.originY + (event.clientY - dragState.startY);
+        renderCropImage();
+    });
+    authCropStage?.addEventListener('pointerup', (event) => {
+        if (!dragState || dragState.pointerId !== event.pointerId) return;
+        authCropStage.releasePointerCapture(event.pointerId);
+        dragState = null;
+        authCropStage.classList.remove('dragging');
+    });
+    authCropStage?.addEventListener('pointercancel', () => {
+        dragState = null;
+        authCropStage.classList.remove('dragging');
+    });
+    window.addEventListener('resize', () => {
+        if (!cropSourceUrl || !cropImageState.naturalWidth || !cropImageState.naturalHeight) return;
+        const stageSize = getCropStageSize();
+        const minScale = Math.max(stageSize / cropImageState.naturalWidth, stageSize / cropImageState.naturalHeight);
+        cropImageState.minScale = minScale;
+        cropImageState.scale = Math.max(cropImageState.scale, minScale);
+        updateCropZoomRange(minScale);
+        renderCropImage();
+    });
     authModal?.addEventListener('click', (event) => {
         if (event.target === authModal) window.closeAuthModal();
     });
