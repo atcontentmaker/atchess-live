@@ -596,12 +596,14 @@
             padding: 16px;
             background: rgba(6, 6, 8, 0.78);
             backdrop-filter: blur(10px);
+            overflow-y: auto;
         }
         .auth-modal.open {
             display: flex;
         }
         .auth-card {
             width: min(440px, 100%);
+            max-height: min(92vh, 860px);
             padding: 22px;
             border-radius: 22px;
             border: 1px solid var(--border);
@@ -610,6 +612,7 @@
             display: flex;
             flex-direction: column;
             gap: 14px;
+            overflow-y: auto;
         }
         .auth-card-head {
             display: flex;
