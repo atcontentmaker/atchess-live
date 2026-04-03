@@ -249,6 +249,20 @@ function sanitizeProfile(profile) {
     };
 }
 
+function doesProfileMatchSeatIdentity(seat, profile) {
+    if (!seat?.profile?.userId || !profile?.userId) return true;
+    return seat.profile.userId === profile.userId;
+}
+
+function roomHasUserOnAnotherSeat(room, userId, excludedColor = null) {
+    if (!userId) return false;
+    return ['white', 'black'].some((color) => {
+        if (color === excludedColor) return false;
+        const seat = room.players[color];
+        return !!seat?.profile?.userId && seat.profile.userId === userId;
+    });
+}
+
 function clearSeatTimer(seat) {
     if (!seat?.disconnectTimer) return;
     clearTimeout(seat.disconnectTimer);
@@ -464,6 +478,7 @@ function tryReclaimSeat(room, socket, deviceId, reconnectToken, profile) {
         if (!seat) continue;
         if (seat.deviceId !== deviceId) continue;
         if (seat.reconnectToken !== reconnectToken) continue;
+        if (!doesProfileMatchSeatIdentity(seat, profile)) return null;
         return reclaimSeat(room, color, socket, profile);
     }
 
@@ -569,9 +584,12 @@ io.on('connection', (socket) => {
 
         let assignedColor = 'spectator';
         let seat = tryReclaimSeat(room, socket, String(deviceId || '').trim(), String(reconnectToken || '').trim(), sanitizedProfile);
+        let warning = null;
 
         if (seat) {
             assignedColor = seat.color;
+        } else if (sanitizedProfile?.userId && roomHasUserOnAnotherSeat(room, sanitizedProfile.userId)) {
+            warning = 'This signed-in account already occupies a seat in the room, so this session joined as spectator.';
         } else if (preferredColor === 'black' && !room.players.black) {
             seat = createSeat('black', socket, deviceId);
             seat.profile = sanitizedProfile;
@@ -602,6 +620,7 @@ io.on('connection', (socket) => {
             roomId: normalizedId,
             color: assignedColor,
             reconnectToken: seat?.reconnectToken || null,
+            warning,
             state: serializeRoom(room)
         });
         emitRoomState(normalizedId);

@@ -11,14 +11,26 @@
         !config.supabaseAnonKey.includes('YOUR_SUPABASE_ANON_KEY');
 
     const authModal = document.getElementById('auth-modal');
+    const authCard = authModal?.querySelector('.auth-card') || null;
+    const authPanel = document.querySelector('.auth-panel');
     const authTitleLine = document.getElementById('auth-title-line');
     const authSubtitleLine = document.getElementById('auth-subtitle-line');
     const authStatusLine = document.getElementById('auth-status-line');
     const authConfigNote = document.getElementById('auth-config-note');
+    const authIdentityAvatar = document.getElementById('auth-identity-avatar');
+    const authIdentityName = document.getElementById('auth-identity-name');
+    const authIdentityEmail = document.getElementById('auth-identity-email');
+    const authSignedInBadge = document.getElementById('auth-signed-in-badge');
+    const authPreviewAvatar = document.getElementById('auth-preview-avatar');
+    const authPreviewName = document.getElementById('auth-preview-name');
+    const authPreviewSubtitle = document.getElementById('auth-preview-subtitle');
     const authEmailInput = document.getElementById('auth-email-input');
     const authOtpInput = document.getElementById('auth-otp-input');
     const authDisplayNameInput = document.getElementById('auth-display-name-input');
     const authAvatarUrlInput = document.getElementById('auth-avatar-url-input');
+    const authUsernameMeta = document.getElementById('auth-username-meta');
+    const authUsernameFeedback = document.getElementById('auth-username-feedback');
+    const authUsernameCount = document.getElementById('auth-username-count');
     const authAvatarFileInput = document.getElementById('auth-avatar-file-input');
     const authAvatarUploadBtn = document.getElementById('auth-avatar-upload-btn');
     const authAvatarCenterBtn = document.getElementById('auth-avatar-center-btn');
@@ -40,6 +52,7 @@
 
     let supabaseClient = null;
     let currentUser = null;
+    let authBackendUnavailable = false;
     let cropSourceUrl = '';
     let cropImageState = {
         naturalWidth: 0,
@@ -50,6 +63,21 @@
         offsetY: 0
     };
     let dragState = null;
+    const MAX_USERNAME_LENGTH = 24;
+    const MAX_AVATAR_FILE_BYTES = 5 * 1024 * 1024;
+    const RESERVED_USERNAMES = new Set([
+        'admin',
+        'administrator',
+        'moderator',
+        'mod',
+        'support',
+        'system',
+        'owner',
+        'atchess',
+        'atchesslive',
+        'atchess live',
+        'stockfish'
+    ]);
 
     function getProfileDisplayName(user) {
         if (!user) return null;
@@ -82,8 +110,78 @@
         window.dispatchEvent(new CustomEvent('atchess-auth-changed', { detail: buildProfile(user) }));
     }
 
-    function setAuthStatus(message) {
-        if (authStatusLine) authStatusLine.textContent = message;
+    function setAvatarElement(element, url, fallbackGlyph) {
+        if (!element) return;
+        if (url) {
+            element.style.backgroundImage = `url("${url.replace(/"/g, '&quot;')}")`;
+            element.classList.add('has-photo');
+            element.textContent = fallbackGlyph || '';
+            return;
+        }
+        element.style.backgroundImage = '';
+        element.classList.remove('has-photo');
+        element.textContent = fallbackGlyph || '';
+    }
+
+    function normalizeUsername(rawValue) {
+        return String(rawValue || '')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, MAX_USERNAME_LENGTH);
+    }
+
+    function validateUsername(rawValue) {
+        const normalized = normalizeUsername(rawValue);
+        const lowered = normalized.toLowerCase();
+
+        if (!normalized) {
+            return { valid: false, normalized, message: 'Username cannot be empty.' };
+        }
+        if (normalized.length < 3) {
+            return { valid: false, normalized, message: 'Use at least 3 characters.' };
+        }
+        if (!/^[a-zA-Z0-9 _.-]+$/.test(normalized)) {
+            return { valid: false, normalized, message: 'Use letters, numbers, spaces, dots, dashes, or underscores only.' };
+        }
+        if (RESERVED_USERNAMES.has(lowered)) {
+            return { valid: false, normalized, message: 'That username is reserved. Pick another one.' };
+        }
+        return { valid: true, normalized, message: 'Looks good.' };
+    }
+
+    function formatAuthError(error, fallbackMessage) {
+        const raw = String(error?.message || error || '').trim();
+        const lowered = raw.toLowerCase();
+        if (
+            lowered.includes('failed to fetch') ||
+            lowered.includes('networkerror') ||
+            lowered.includes('network request failed') ||
+            lowered.includes('err_connection_closed') ||
+            lowered.includes('load failed')
+        ) {
+            return 'Account services are temporarily unavailable. Try again in a minute.';
+        }
+        return raw || fallbackMessage;
+    }
+
+    function setAuthBackendAvailability(isAvailable, message = '') {
+        authBackendUnavailable = !isAvailable;
+        authCard?.classList.toggle('auth-disabled', !isAvailable);
+        authPanel?.classList.toggle('auth-disabled', !isAvailable);
+        const disableActions = !isAvailable;
+        if (authSaveProfileBtn) authSaveProfileBtn.disabled = disableActions || !currentUser;
+        if (authSendOtpBtn) authSendOtpBtn.disabled = disableActions;
+        if (authVerifyOtpBtn) authVerifyOtpBtn.disabled = disableActions;
+        if (authGoogleBtn) authGoogleBtn.disabled = disableActions || !config.googleEnabled;
+        if (authSignoutBtn) authSignoutBtn.disabled = disableActions || !currentUser;
+        if (message) setAuthStatus(message, disableActions ? 'error' : 'success');
+    }
+
+    function setAuthStatus(message, tone = '') {
+        if (!authStatusLine) return;
+        authStatusLine.textContent = message;
+        authStatusLine.classList.toggle('error', tone === 'error');
+        authStatusLine.classList.toggle('success', tone === 'success');
     }
 
     function setButtonBusy(button, busy, busyText, idleText) {
@@ -92,15 +190,47 @@
         button.textContent = busy ? busyText : idleText;
     }
 
-    function updatePhotoPreview(url) {
-        if (!authPhotoPreview) return;
-        if (url) {
-            authPhotoPreview.style.backgroundImage = `url("${url.replace(/"/g, '&quot;')}")`;
-            authPhotoPreview.textContent = '';
-            return;
+    function refreshUsernameMeta() {
+        if (!authDisplayNameInput) return true;
+        const validation = validateUsername(authDisplayNameInput.value);
+        authDisplayNameInput.value = validation.normalized;
+        if (authUsernameCount) authUsernameCount.textContent = `${validation.normalized.length} / ${MAX_USERNAME_LENGTH}`;
+        if (authUsernameFeedback) authUsernameFeedback.textContent = validation.message;
+        if (authUsernameMeta) {
+            authUsernameMeta.classList.toggle('error', !validation.valid);
+            authUsernameMeta.classList.toggle('success', validation.valid);
         }
-        authPhotoPreview.style.backgroundImage = '';
-        authPhotoPreview.textContent = '\u2659';
+        authDisplayNameInput.classList.toggle('invalid', !validation.valid);
+        if (authSaveProfileBtn && !authBackendUnavailable) {
+            authSaveProfileBtn.disabled = !currentUser || !validation.valid;
+        }
+        return validation.valid;
+    }
+
+    function refreshAccountPreview() {
+        const previewName = normalizeUsername(authDisplayNameInput?.value) || describeUser(currentUser) || 'Guest Player';
+        const previewAvatar = authAvatarUrlInput?.value?.trim() || getProfileAvatarUrl(currentUser) || '';
+        const previewSubtitle = currentUser
+            ? `Signed in as ${currentUser.email || describeUser(currentUser)}`
+            : 'Guest preview - save this profile after signing in.';
+
+        setAvatarElement(authPreviewAvatar, previewAvatar, '\u2659');
+        if (authPreviewName) authPreviewName.textContent = previewName;
+        if (authPreviewSubtitle) authPreviewSubtitle.textContent = previewSubtitle;
+
+        const sidebarAvatar = currentUser ? getProfileAvatarUrl(currentUser) : '';
+        setAvatarElement(authIdentityAvatar, sidebarAvatar, '\u2659');
+        if (authIdentityName) authIdentityName.textContent = currentUser ? describeUser(currentUser) : 'Guest';
+        if (authIdentityEmail) authIdentityEmail.textContent = currentUser?.email || 'Not signed in';
+        if (authSignedInBadge) {
+            authSignedInBadge.textContent = currentUser ? `Signed In · ${describeUser(currentUser)}` : 'Guest Session';
+            authSignedInBadge.classList.toggle('muted', !currentUser);
+        }
+    }
+
+    function updatePhotoPreview(url) {
+        setAvatarElement(authPhotoPreview, url, '\u2659');
+        refreshAccountPreview();
     }
 
     function getCropStageSize() {
@@ -161,6 +291,10 @@
             resetCropPosition();
             authCropImage.hidden = false;
             updatePhotoPreview(cropSourceUrl);
+        };
+        authCropImage.onerror = function () {
+            authCropImage.hidden = true;
+            setAuthStatus('That image could not be loaded. Try another link or upload the file directly.', 'error');
         };
         authCropImage.crossOrigin = cropSourceUrl.startsWith('data:image/') ? '' : 'anonymous';
         authCropImage.src = cropSourceUrl;
@@ -261,10 +395,38 @@
 
     function formatHistoryDate(value) {
         try {
-            return new Date(value).toLocaleString();
+            return new Date(value).toLocaleString([], {
+                dateStyle: 'medium',
+                timeStyle: 'short'
+            });
         } catch (_error) {
             return 'Recently';
         }
+    }
+
+    function describeHistoryOutcome(row) {
+        const result = String(row.result || 'draw').toLowerCase();
+        const reason = String(row.reason || 'game').toLowerCase();
+        const outcomePrefix = result === 'win' ? 'Win' : result === 'loss' ? 'Loss' : 'Draw';
+        const reasonLabel = reason.charAt(0).toUpperCase() + reason.slice(1);
+        return `${outcomePrefix} by ${reasonLabel}`;
+    }
+
+    function createHistoryCodeRow(label, value) {
+        const row = document.createElement('div');
+        row.className = 'match-history-extra-row';
+
+        const rowLabel = document.createElement('div');
+        rowLabel.className = 'match-history-extra-label';
+        rowLabel.textContent = label;
+
+        const code = document.createElement('div');
+        code.className = 'match-history-code';
+        code.textContent = value || 'Unavailable';
+
+        row.appendChild(rowLabel);
+        row.appendChild(code);
+        return row;
     }
 
     function renderMatchHistory(rows) {
@@ -284,6 +446,16 @@
             item.className = 'match-history-item';
 
             const resultClass = row.result === 'win' ? 'win' : row.result === 'loss' ? 'loss' : 'draw';
+            const summary = document.createElement('button');
+            summary.type = 'button';
+            summary.className = 'match-history-summary';
+
+            const main = document.createElement('div');
+            main.className = 'match-history-main';
+
+            const avatar = document.createElement('div');
+            avatar.className = 'match-history-avatar';
+            setAvatarElement(avatar, row.opponent_avatar_url || '', '\u265F');
 
             const meta = document.createElement('div');
             meta.className = 'match-history-meta';
@@ -294,16 +466,37 @@
 
             const detail = document.createElement('div');
             detail.className = 'match-history-detail';
-            detail.textContent = `${(row.mode || 'game').toUpperCase()} · ${(row.reason || 'result').toUpperCase()} · ${formatHistoryDate(row.played_at)}`;
+            detail.textContent = `${describeHistoryOutcome(row)} · ${formatHistoryDate(row.played_at)}`;
 
             const result = document.createElement('div');
             result.className = `match-history-result ${resultClass}`;
-            result.textContent = row.result || 'draw';
+            result.textContent = describeHistoryOutcome(row);
 
+            const chevron = document.createElement('div');
+            chevron.className = 'match-history-chevron';
+            chevron.textContent = 'Details';
+
+            const extra = document.createElement('div');
+            extra.className = 'match-history-extra';
+
+            extra.appendChild(createHistoryCodeRow('Mode & Color', `${String(row.mode || 'game').toUpperCase()} · ${(row.player_color || 'white').toUpperCase()}`));
+            extra.appendChild(createHistoryCodeRow('Final FEN', row.fen || 'Unavailable'));
+            extra.appendChild(createHistoryCodeRow('PGN', row.pgn || 'Unavailable'));
+
+            main.appendChild(avatar);
             meta.appendChild(opponent);
             meta.appendChild(detail);
-            item.appendChild(meta);
-            item.appendChild(result);
+            main.appendChild(meta);
+            summary.appendChild(main);
+            summary.appendChild(result);
+            summary.appendChild(chevron);
+            summary.addEventListener('click', () => {
+                item.classList.toggle('match-history-expanded');
+                chevron.textContent = item.classList.contains('match-history-expanded') ? 'Hide' : 'Details';
+            });
+
+            item.appendChild(summary);
+            item.appendChild(extra);
             matchHistoryList.appendChild(item);
         });
     }
@@ -313,21 +506,39 @@
             renderMatchHistory([]);
             return;
         }
+        try {
+            let query = await supabaseClient
+                .from('match_history')
+                .select('played_at, mode, result, reason, opponent_name, opponent_avatar_url, pgn, fen, player_color')
+                .eq('user_id', currentUser.id)
+                .order('played_at', { ascending: false })
+                .limit(10);
 
-        const { data, error } = await supabaseClient
-            .from('match_history')
-            .select('played_at, mode, result, reason, opponent_name')
-            .eq('user_id', currentUser.id)
-            .order('played_at', { ascending: false })
-            .limit(10);
+            if (query.error) {
+                query = await supabaseClient
+                    .from('match_history')
+                    .select('played_at, mode, result, reason, opponent_name, pgn, fen, player_color')
+                    .eq('user_id', currentUser.id)
+                    .order('played_at', { ascending: false })
+                    .limit(10);
+            }
 
-        if (error) {
+            if (query.error) {
+                if (formatAuthError(query.error, '').includes('temporarily unavailable')) {
+                    setAuthBackendAvailability(false, 'Account services are temporarily unavailable. Try again in a minute.');
+                } else {
+                    renderMatchHistory([]);
+                    setAuthStatus('Signed in. Match history table is not ready yet.', 'error');
+                }
+                return;
+            }
+
+            setAuthBackendAvailability(true);
+            renderMatchHistory(query.data || []);
+        } catch (error) {
             renderMatchHistory([]);
-            setAuthStatus('Signed in. Match history table is not ready yet.');
-            return;
+            setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
         }
-
-        renderMatchHistory(data || []);
     }
 
     function updateAuthUI() {
@@ -336,10 +547,9 @@
         if (!isConfigured) {
             authTitleLine.textContent = 'Auth Setup Needed';
             authSubtitleLine.textContent = 'Add your Supabase project URL and anon key in auth-config.js to enable email OTP and Google sign-in.';
-            authSignoutBtn.disabled = true;
-            if (authGoogleBtn) authGoogleBtn.disabled = true;
-            if (authSaveProfileBtn) authSaveProfileBtn.disabled = true;
+            setAuthBackendAvailability(false);
             renderMatchHistory([]);
+            refreshAccountPreview();
             return;
         }
 
@@ -347,31 +557,40 @@
             authTitleLine.textContent = describeUser(currentUser);
             authSubtitleLine.textContent = currentUser.email ? `Signed in as ${currentUser.email}` : 'Signed in';
             authOpenBtn.textContent = 'Manage Account';
-            authSignoutBtn.disabled = false;
-            if (authSaveProfileBtn) authSaveProfileBtn.disabled = false;
         } else {
             authTitleLine.textContent = 'Guest Mode';
             authSubtitleLine.textContent = 'Create an account with email OTP or Google so we can attach identity to your profile later.';
             authOpenBtn.textContent = 'Create / Sign In';
-            authSignoutBtn.disabled = true;
-            if (authSaveProfileBtn) authSaveProfileBtn.disabled = true;
         }
         fillProfileInputs(currentUser);
+        if (!authBackendUnavailable) setAuthBackendAvailability(true);
+        refreshUsernameMeta();
+        refreshAccountPreview();
     }
 
     async function handleSession() {
         if (!supabaseClient) return;
-        const { data, error } = await supabaseClient.auth.getUser();
-        if (error) {
-            setAuthStatus(error.message || 'Could not read account session.');
-            return;
-        }
-        currentUser = data?.user || null;
-        updateAuthUI();
-        emitAuthProfile(currentUser);
-        await loadMatchHistory();
-        if (currentUser) {
-            setAuthStatus(`Signed in as ${currentUser.email || describeUser(currentUser)}.`);
+        try {
+            const { data, error } = await supabaseClient.auth.getUser();
+            if (error) {
+                const message = formatAuthError(error, 'Could not read account session.');
+                if (message.includes('temporarily unavailable')) {
+                    setAuthBackendAvailability(false, message);
+                } else {
+                    setAuthStatus(message, 'error');
+                }
+                return;
+            }
+            currentUser = data?.user || null;
+            setAuthBackendAvailability(true);
+            updateAuthUI();
+            emitAuthProfile(currentUser);
+            await loadMatchHistory();
+            if (currentUser) {
+                setAuthStatus(`Signed in as ${currentUser.email || describeUser(currentUser)}.`, 'success');
+            }
+        } catch (error) {
+            setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
         }
     }
 
@@ -390,24 +609,34 @@
 
     window.signOutAccount = async function () {
         if (!supabaseClient) {
-            setAuthStatus('Auth is not configured yet.');
+            setAuthStatus('Auth is not configured yet.', 'error');
             return;
         }
-        const { error } = await supabaseClient.auth.signOut();
-        if (error) {
-            setAuthStatus(error.message || 'Could not sign out.');
-            return;
+        try {
+            const { error } = await supabaseClient.auth.signOut();
+            if (error) {
+                const message = formatAuthError(error, 'Could not sign out.');
+                if (message.includes('temporarily unavailable')) {
+                    setAuthBackendAvailability(false, message);
+                } else {
+                    setAuthStatus(message, 'error');
+                }
+                return;
+            }
+            currentUser = null;
+            setAuthBackendAvailability(true);
+            updateAuthUI();
+            emitAuthProfile(null);
+            renderMatchHistory([]);
+            setAuthStatus('Signed out.', 'success');
+        } catch (error) {
+            setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
         }
-        currentUser = null;
-        updateAuthUI();
-        emitAuthProfile(null);
-        renderMatchHistory([]);
-        setAuthStatus('Signed out.');
     };
 
     window.recordMatchHistory = async function (payload) {
         if (!supabaseClient || !currentUser || !payload) return;
-        const { error } = await supabaseClient.from('match_history').insert({
+        const basePayload = {
             user_id: currentUser.id,
             mode: payload.mode || 'engine',
             result: payload.result || 'draw',
@@ -416,120 +645,182 @@
             player_color: payload.playerColor || 'white',
             pgn: payload.pgn || '',
             fen: payload.fen || ''
-        });
-        if (!error) {
-            await loadMatchHistory();
+        };
+        try {
+            let result = await supabaseClient.from('match_history').insert({
+                ...basePayload,
+                opponent_avatar_url: payload.opponentAvatarUrl || null
+            });
+            if (result.error) {
+                result = await supabaseClient.from('match_history').insert(basePayload);
+            }
+            if (!result.error) {
+                setAuthBackendAvailability(true);
+                await loadMatchHistory();
+            }
+        } catch (_error) {
+            setAuthBackendAvailability(false, 'Account services are temporarily unavailable. Try again in a minute.');
         }
     };
 
     async function sendOtp() {
         if (!supabaseClient) {
-            setAuthStatus('Auth is not configured yet.');
+            setAuthStatus('Auth is not configured yet.', 'error');
             return;
         }
         const email = authEmailInput?.value?.trim();
         if (!email) {
-            setAuthStatus('Enter your email address first.');
+            setAuthStatus('Enter your email address first.', 'error');
             return;
         }
 
-        setButtonBusy(authSendOtpBtn, true, 'Sending...', 'Send OTP');
-        const { error } = await supabaseClient.auth.signInWithOtp({
-            email,
-            options: {
-                shouldCreateUser: true,
-                emailRedirectTo: window.location.origin
+        try {
+            setButtonBusy(authSendOtpBtn, true, 'Sending...', 'Send OTP');
+            const { error } = await supabaseClient.auth.signInWithOtp({
+                email,
+                options: {
+                    shouldCreateUser: true,
+                    emailRedirectTo: window.location.origin
+                }
+            });
+            setButtonBusy(authSendOtpBtn, false, 'Sending...', 'Send OTP');
+
+            if (error) {
+                const message = formatAuthError(error, 'Could not send OTP.');
+                if (message.includes('temporarily unavailable')) {
+                    setAuthBackendAvailability(false, message);
+                } else {
+                    setAuthStatus(message, 'error');
+                }
+                return;
             }
-        });
-        setButtonBusy(authSendOtpBtn, false, 'Sending...', 'Send OTP');
 
-        if (error) {
-            setAuthStatus(error.message || 'Could not send OTP.');
-            return;
+            setAuthBackendAvailability(true);
+            setAuthStatus(`OTP sent to ${email}. If Supabase is still using magic links, switch the email template to token mode first.`, 'success');
+        } catch (error) {
+            setButtonBusy(authSendOtpBtn, false, 'Sending...', 'Send OTP');
+            setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
         }
-        setAuthStatus(`OTP sent to ${email}. If Supabase is still using magic links, switch the email template to token mode first.`);
     }
 
     async function verifyOtp() {
         if (!supabaseClient) {
-            setAuthStatus('Auth is not configured yet.');
+            setAuthStatus('Auth is not configured yet.', 'error');
             return;
         }
         const email = authEmailInput?.value?.trim();
         const token = authOtpInput?.value?.trim();
         if (!email || !token) {
-            setAuthStatus('Enter both your email and the OTP.');
+            setAuthStatus('Enter both your email and the OTP.', 'error');
             return;
         }
+        try {
+            setButtonBusy(authVerifyOtpBtn, true, 'Verifying...', 'Verify OTP');
+            const { data, error } = await supabaseClient.auth.verifyOtp({
+                email,
+                token,
+                type: 'email'
+            });
+            setButtonBusy(authVerifyOtpBtn, false, 'Verifying...', 'Verify OTP');
 
-        setButtonBusy(authVerifyOtpBtn, true, 'Verifying...', 'Verify OTP');
-        const { data, error } = await supabaseClient.auth.verifyOtp({
-            email,
-            token,
-            type: 'email'
-        });
-        setButtonBusy(authVerifyOtpBtn, false, 'Verifying...', 'Verify OTP');
+            if (error) {
+                const message = formatAuthError(error, 'Invalid OTP.');
+                if (message.includes('temporarily unavailable')) {
+                    setAuthBackendAvailability(false, message);
+                } else {
+                    setAuthStatus(message, 'error');
+                }
+                return;
+            }
 
-        if (error) {
-            setAuthStatus(error.message || 'Invalid OTP.');
-            return;
+            currentUser = data?.user || null;
+            setAuthBackendAvailability(true);
+            updateAuthUI();
+            emitAuthProfile(currentUser);
+            await loadMatchHistory();
+            setAuthStatus('Email verified. You are signed in.', 'success');
+            window.closeAuthModal();
+        } catch (error) {
+            setButtonBusy(authVerifyOtpBtn, false, 'Verifying...', 'Verify OTP');
+            setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
         }
-
-        currentUser = data?.user || null;
-        updateAuthUI();
-        emitAuthProfile(currentUser);
-        await loadMatchHistory();
-        setAuthStatus('Email verified. You are signed in.');
-        window.closeAuthModal();
     }
 
     async function saveProfile() {
         if (!supabaseClient || !currentUser) {
-            setAuthStatus('Sign in before saving a profile.');
+            setAuthStatus('Sign in before saving a profile.', 'error');
             return;
         }
 
-        const displayName = authDisplayNameInput?.value?.trim();
+        const validation = validateUsername(authDisplayNameInput?.value);
+        refreshUsernameMeta();
+        if (!validation.valid) {
+            setAuthStatus(validation.message, 'error');
+            return;
+        }
+
+        const displayName = validation.normalized;
         const avatarUrl = authAvatarUrlInput?.value?.trim();
 
-        setButtonBusy(authSaveProfileBtn, true, 'Saving...', 'Save Profile');
-        const { data, error } = await supabaseClient.auth.updateUser({
-            data: {
-                atchess_display_name: displayName || currentUser.email || 'Player',
-                atchess_avatar_url: avatarUrl || null
+        try {
+            setButtonBusy(authSaveProfileBtn, true, 'Saving...', 'Save Profile');
+            const { data, error } = await supabaseClient.auth.updateUser({
+                data: {
+                    atchess_display_name: displayName,
+                    atchess_avatar_url: avatarUrl || null
+                }
+            });
+            setButtonBusy(authSaveProfileBtn, false, 'Saving...', 'Save Profile');
+
+            if (error) {
+                const message = formatAuthError(error, 'Could not save profile.');
+                if (message.includes('temporarily unavailable')) {
+                    setAuthBackendAvailability(false, message);
+                } else {
+                    setAuthStatus(message, 'error');
+                }
+                return;
             }
-        });
-        setButtonBusy(authSaveProfileBtn, false, 'Saving...', 'Save Profile');
 
-        if (error) {
-            setAuthStatus(error.message || 'Could not save profile.');
-            return;
+            currentUser = data?.user || currentUser;
+            setAuthBackendAvailability(true);
+            updateAuthUI();
+            emitAuthProfile(currentUser);
+            clearAvatarEditor();
+            setAuthStatus('Profile saved.', 'success');
+        } catch (error) {
+            setButtonBusy(authSaveProfileBtn, false, 'Saving...', 'Save Profile');
+            setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
         }
-
-        currentUser = data?.user || currentUser;
-        updateAuthUI();
-        emitAuthProfile(currentUser);
-        clearAvatarEditor();
-        setAuthStatus('Profile saved.');
     }
 
     async function signInWithGoogle() {
         if (!supabaseClient) {
-            setAuthStatus('Auth is not configured yet.');
+            setAuthStatus('Auth is not configured yet.', 'error');
             return;
         }
 
-        setButtonBusy(authGoogleBtn, true, 'Redirecting...', 'Continue with Google');
-        const { error } = await supabaseClient.auth.signInWithOAuth({
-            provider: 'google',
-            options: {
-                redirectTo: window.location.origin
-            }
-        });
-        setButtonBusy(authGoogleBtn, false, 'Redirecting...', 'Continue with Google');
+        try {
+            setButtonBusy(authGoogleBtn, true, 'Redirecting...', 'Continue with Google');
+            const { error } = await supabaseClient.auth.signInWithOAuth({
+                provider: 'google',
+                options: {
+                    redirectTo: window.location.origin
+                }
+            });
+            setButtonBusy(authGoogleBtn, false, 'Redirecting...', 'Continue with Google');
 
-        if (error) {
-            setAuthStatus(error.message || 'Could not start Google sign-in.');
+            if (error) {
+                const message = formatAuthError(error, 'Could not start Google sign-in.');
+                if (message.includes('temporarily unavailable')) {
+                    setAuthBackendAvailability(false, message);
+                } else {
+                    setAuthStatus(message, 'error');
+                }
+            }
+        } catch (error) {
+            setButtonBusy(authGoogleBtn, false, 'Redirecting...', 'Continue with Google');
+            setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
         }
     }
 
@@ -541,7 +832,7 @@
         }
 
         if (!window.supabase?.createClient) {
-            setAuthStatus('Supabase client failed to load.');
+            setAuthStatus('Supabase client failed to load.', 'error');
             return;
         }
 
@@ -555,6 +846,7 @@
 
         supabaseClient.auth.onAuthStateChange((_event, session) => {
             currentUser = session?.user || null;
+            setAuthBackendAvailability(true);
             updateAuthUI();
             emitAuthProfile(currentUser);
             loadMatchHistory();
@@ -585,15 +877,25 @@
         const file = authAvatarFileInput.files?.[0];
         if (!file) return;
         if (!file.type.startsWith('image/')) {
-            setAuthStatus('Choose a PNG, JPG, WEBP, or GIF image file.');
+            setAuthStatus('Choose a PNG, JPG, WEBP, or GIF image file.', 'error');
+            if (authAvatarFileInput) authAvatarFileInput.value = '';
+            return;
+        }
+        if (file.size > MAX_AVATAR_FILE_BYTES) {
+            setAuthStatus('Choose an image smaller than 5 MB.', 'error');
+            if (authAvatarFileInput) authAvatarFileInput.value = '';
             return;
         }
         const reader = new FileReader();
         reader.onload = () => {
             loadCropSource(typeof reader.result === 'string' ? reader.result : '');
-            setAuthStatus('Photo loaded. Drag it into place, then click Use Cropped Photo.');
+            setAuthStatus('Photo loaded. Drag it into place, then click Use Cropped Photo.', 'success');
         };
         reader.readAsDataURL(file);
+    });
+    authDisplayNameInput?.addEventListener('input', () => {
+        refreshUsernameMeta();
+        refreshAccountPreview();
     });
     authAvatarUrlInput?.addEventListener('input', () => {
         updatePhotoPreview(authAvatarUrlInput.value.trim());
@@ -660,6 +962,8 @@
     }
 
     updateAuthUI();
+    refreshUsernameMeta();
+    refreshAccountPreview();
     emitAuthProfile(null);
     initAuth();
 })();

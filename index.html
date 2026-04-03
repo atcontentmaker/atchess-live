@@ -534,6 +534,80 @@
             flex-direction: column;
             gap: 10px;
         }
+        .auth-identity {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.03);
+        }
+        .auth-identity-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: var(--surface-3);
+            border: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            color: var(--text-2);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            flex-shrink: 0;
+        }
+        .auth-identity-avatar.has-photo {
+            color: transparent;
+        }
+        .auth-identity-copy {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .auth-identity-name {
+            color: var(--text-1);
+            font-size: 13px;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .auth-identity-email {
+            color: var(--text-2);
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .auth-badge-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            align-items: center;
+        }
+        .auth-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 10px;
+            border-radius: 999px;
+            border: 1px solid var(--accent-glow);
+            background: var(--accent-dim);
+            color: var(--accent);
+            font-size: 10px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-family: var(--font-mono);
+        }
+        .auth-badge.muted {
+            border-color: var(--border);
+            background: rgba(255,255,255,0.03);
+            color: var(--text-2);
+        }
         .auth-summary {
             display: flex;
             flex-direction: column;
@@ -642,6 +716,12 @@
             color: var(--text-2);
             font-size: 12px;
             line-height: 1.5;
+        }
+        .auth-status-line.error {
+            color: #ff9c9c;
+        }
+        .auth-status-line.success {
+            color: #81c995;
         }
         .auth-stack {
             display: flex;
@@ -784,6 +864,90 @@
             color: var(--text-1);
             font-size: 14px;
         }
+        .auth-input.invalid {
+            border-color: rgba(229, 115, 115, 0.75);
+            box-shadow: 0 0 0 1px rgba(229, 115, 115, 0.2);
+        }
+        .auth-inline-meta {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            color: var(--text-2);
+            font-size: 11px;
+        }
+        .auth-inline-meta.error {
+            color: #ff9c9c;
+        }
+        .auth-inline-meta.success {
+            color: #81c995;
+        }
+        .auth-preview-card {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015));
+        }
+        .auth-preview-avatar {
+            width: 52px;
+            height: 52px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--surface-3);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-2);
+            font-size: 22px;
+            flex-shrink: 0;
+        }
+        .auth-preview-avatar.has-photo {
+            color: transparent;
+        }
+        .auth-preview-copy {
+            min-width: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .auth-preview-name {
+            color: var(--text-1);
+            font-size: 15px;
+            font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .auth-preview-subtitle {
+            color: var(--text-2);
+            font-size: 11px;
+            line-height: 1.4;
+        }
+        .auth-btn-primary.recommended {
+            position: relative;
+            justify-content: center;
+        }
+        .auth-btn-primary.recommended::after {
+            content: 'Recommended';
+            position: absolute;
+            right: 10px;
+            top: 50%;
+            transform: translateY(-50%);
+            padding: 4px 8px;
+            border-radius: 999px;
+            background: rgba(0,0,0,0.16);
+            color: var(--accent-text);
+            font-size: 9px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-family: var(--font-mono);
+        }
         .player-avatar {
             background-size: cover;
             background-position: center;
@@ -806,19 +970,59 @@
             border-radius: var(--radius-sm);
             background: var(--surface-3);
             display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .match-history-summary {
+            width: 100%;
+            border: 0;
+            padding: 0;
+            background: transparent;
+            display: flex;
+            align-items: center;
             justify-content: space-between;
             gap: 12px;
+            cursor: pointer;
+            text-align: left;
+        }
+        .match-history-main {
+            display: flex;
             align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+        .match-history-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.04);
+            background-size: cover;
+            background-position: center;
+            background-repeat: no-repeat;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--text-2);
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+        .match-history-avatar.has-photo {
+            color: transparent;
         }
         .match-history-meta {
             display: flex;
             flex-direction: column;
             gap: 2px;
+            min-width: 0;
         }
         .match-history-opponent {
             color: var(--text-1);
             font-size: 13px;
             font-weight: 700;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
         .match-history-detail {
             color: var(--text-2);
@@ -829,11 +1033,64 @@
             letter-spacing: 0.12em;
             text-transform: uppercase;
             font-weight: 800;
-            white-space: nowrap;
+            white-space: normal;
+            text-align: right;
+            min-width: 110px;
         }
         .match-history-result.win { color: #81c995; }
         .match-history-result.loss { color: #e57373; }
         .match-history-result.draw { color: #f6c90e; }
+        .match-history-chevron {
+            color: var(--text-3);
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            font-family: var(--font-mono);
+        }
+        .match-history-expanded .match-history-chevron {
+            color: var(--accent);
+        }
+        .match-history-extra {
+            display: none;
+            flex-direction: column;
+            gap: 8px;
+            padding-top: 8px;
+            border-top: 1px solid var(--border);
+        }
+        .match-history-expanded .match-history-extra {
+            display: flex;
+        }
+        .match-history-extra-row {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .match-history-extra-label {
+            color: var(--text-2);
+            font-size: 10px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+        .match-history-code {
+            max-height: 110px;
+            overflow: auto;
+            white-space: pre-wrap;
+            word-break: break-word;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(0,0,0,0.16);
+            padding: 8px 10px;
+            color: var(--text-1);
+            font-size: 11px;
+            font-family: var(--font-mono);
+        }
+        .auth-disabled .auth-input,
+        .auth-disabled .auth-btn-primary,
+        .auth-disabled .auth-btn-secondary,
+        .auth-disabled .auth-slider,
+        .auth-disabled select {
+            opacity: 0.6;
+        }
         .auth-divider {
             display: flex;
             align-items: center;
@@ -1311,6 +1568,16 @@
             </div>
 
             <div class="auth-panel">
+                <div class="auth-identity">
+                    <div class="auth-identity-avatar" id="auth-identity-avatar">&#9817;</div>
+                    <div class="auth-identity-copy">
+                        <div class="auth-identity-name" id="auth-identity-name">Guest</div>
+                        <div class="auth-identity-email" id="auth-identity-email">Not signed in</div>
+                    </div>
+                </div>
+                <div class="auth-badge-row">
+                    <div class="auth-badge muted" id="auth-signed-in-badge">Guest Session</div>
+                </div>
                 <div class="auth-summary">
                     <div class="auth-kicker">Account</div>
                     <div class="auth-title" id="auth-title-line">Guest Mode</div>
@@ -1380,9 +1647,20 @@
         <div class="auth-note">We use Supabase Auth to deliver secure sign-in codes.</div>
         <div class="auth-note">The email may mention Supabase, but the code is for your ATChess account.</div>
         <div class="auth-note">You will never be asked for your password.</div>
+        <div class="auth-preview-card">
+            <div class="auth-preview-avatar" id="auth-preview-avatar">&#9817;</div>
+            <div class="auth-preview-copy">
+                <div class="auth-preview-name" id="auth-preview-name">Guest Player</div>
+                <div class="auth-preview-subtitle" id="auth-preview-subtitle">Your saved username and profile photo will appear here before you save.</div>
+            </div>
+        </div>
         <div class="auth-profile-grid">
-            <input class="auth-input" id="auth-display-name-input" type="text" maxlength="30" placeholder="Username">
+            <input class="auth-input" id="auth-display-name-input" type="text" maxlength="24" placeholder="Username">
             <input class="auth-input" id="auth-avatar-url-input" type="url" placeholder="Profile photo URL">
+        </div>
+        <div class="auth-inline-meta" id="auth-username-meta">
+            <span id="auth-username-feedback">Choose a public username for boards, rooms, and history.</span>
+            <span id="auth-username-count">0 / 24</span>
         </div>
         <div class="auth-photo-editor">
             <div class="auth-photo-topline">
@@ -1425,14 +1703,14 @@
             <div class="auth-note">Tip: drag the image inside the square, tweak zoom, then click <code>Use Cropped Photo</code>.</div>
         </div>
         <button class="auth-btn-secondary" id="auth-save-profile-btn" type="button">Save Profile</button>
+        <button class="auth-btn-primary recommended" id="auth-google-btn" type="button">Continue with Google</button>
+        <div class="auth-divider">email backup</div>
         <div class="auth-stack">
             <input class="auth-input" id="auth-email-input" type="email" placeholder="you@example.com" autocomplete="email">
             <button class="auth-btn-primary" id="auth-send-otp-btn" type="button">Send OTP</button>
             <input class="auth-input" id="auth-otp-input" type="text" inputmode="numeric" maxlength="6" placeholder="Enter the 6-digit OTP">
             <button class="auth-btn-secondary" id="auth-verify-otp-btn" type="button">Verify OTP</button>
         </div>
-        <div class="auth-divider">or</div>
-        <button class="auth-btn-secondary" id="auth-google-btn" type="button">Continue with Google</button>
         <div class="auth-status-line" id="auth-status-line">Auth is optional. You can keep playing as a guest.</div>
         <div class="auth-note" id="auth-config-note">Fill in <code>auth-config.js</code> with your Supabase project URL and anon key, then enable Google in the Supabase dashboard.</div>
         <div class="auth-divider">history</div>
@@ -1698,6 +1976,7 @@ function ensureSocket() {
 function attemptRoomReconnect(showMessage = false) {
     if (!socket || !onlineRoomId || reconnectAttemptInFlight) return;
     const payload = buildJoinRoomPayload(onlineRoomId);
+    payload.profile = getCurrentPlayerProfileForRoom();
     if (!payload.reconnectToken) {
         setOnlineStatus(`Disconnected. Rejoin with the room code on this device within ${ONLINE_RECONNECT_GRACE_SECONDS} seconds.`, false);
         return;
@@ -1716,6 +1995,8 @@ function attemptRoomReconnect(showMessage = false) {
         if (response.state) applyOnlineRoomState(response.state);
         if (showMessage && onlinePlayerColor !== 'spectator') {
             setOnlineStatus(`Reconnected as ${onlinePlayerColor}.`, true);
+        } else if (response.warning) {
+            setOnlineStatus(response.warning, true);
         }
         updateModeUI();
     });
@@ -1841,12 +2122,12 @@ function joinOnlineRoom() {
         onlinePlayerColor = response.color || 'spectator';
         if (response.reconnectToken) rememberRoomCredential(onlineRoomId, onlinePlayerColor, response.reconnectToken);
         syncOnlineBoardOrientation();
-        setOnlineStatus(
+        const joinMessage = response.warning || (
             onlinePlayerColor === 'spectator'
                 ? `Joined room ${onlineRoomId} as spectator.`
-                : `Joined room ${onlineRoomId} as ${onlinePlayerColor}.`,
-            true
+                : `Joined room ${onlineRoomId} as ${onlinePlayerColor}.`
         );
+        setOnlineStatus(joinMessage, true);
         if (response.state) applyOnlineRoomState(response.state);
         updateModeUI();
     });
@@ -1997,7 +2278,7 @@ function computeMatchRecordKey(mode, result, reason) {
     return [mode, result, reason, game.pgn(), onlineRoomId || 'local'].join('|');
 }
 
-function recordFinishedMatchIfNeeded(mode, result, reason, opponentName) {
+function recordFinishedMatchIfNeeded(mode, result, reason, opponentName, opponentAvatarUrl = null) {
     if (!currentAuthProfile || typeof window.recordMatchHistory !== 'function') return;
     const recordKey = computeMatchRecordKey(mode, result, reason);
     if (lastRecordedMatchKey === recordKey) return;
@@ -2007,6 +2288,7 @@ function recordFinishedMatchIfNeeded(mode, result, reason, opponentName) {
         result,
         reason,
         opponentName,
+        opponentAvatarUrl,
         playerColor: getHumanColorCode() === 'b' ? 'black' : 'white',
         pgn: game.pgn(),
         fen: game.fen()
@@ -2018,27 +2300,31 @@ function maybeRecordMatchHistory() {
     if (!humanColor) return;
 
     const mode = currentMode === 'online' ? 'online' : 'engine';
-    const opponentName = currentMode === 'online'
+    const opponentProfile = currentMode === 'online'
         ? (humanColor === 'w'
-            ? (onlineRoomState?.players?.black?.profile?.displayName || 'Opponent')
-            : (onlineRoomState?.players?.white?.profile?.displayName || 'Opponent'))
+            ? onlineRoomState?.players?.black?.profile
+            : onlineRoomState?.players?.white?.profile)
+        : null;
+    const opponentName = currentMode === 'online'
+        ? (opponentProfile?.displayName || 'Opponent')
         : 'Stockfish';
+    const opponentAvatarUrl = currentMode === 'online' ? (opponentProfile?.avatarUrl || null) : null;
 
     if (resigned) {
-        recordFinishedMatchIfNeeded(mode, humanResignedThisGame ? 'loss' : 'win', 'resignation', opponentName);
+        recordFinishedMatchIfNeeded(mode, humanResignedThisGame ? 'loss' : 'win', 'resignation', opponentName, opponentAvatarUrl);
         return;
     }
     if (timeoutWinner) {
-        recordFinishedMatchIfNeeded(mode, timeoutWinner.charAt(0) === humanColor ? 'win' : 'loss', 'timeout', opponentName);
+        recordFinishedMatchIfNeeded(mode, timeoutWinner.charAt(0) === humanColor ? 'win' : 'loss', 'timeout', opponentName, opponentAvatarUrl);
         return;
     }
     if (game.in_checkmate()) {
         const winner = game.turn() === 'w' ? 'b' : 'w';
-        recordFinishedMatchIfNeeded(mode, winner === humanColor ? 'win' : 'loss', 'checkmate', opponentName);
+        recordFinishedMatchIfNeeded(mode, winner === humanColor ? 'win' : 'loss', 'checkmate', opponentName, opponentAvatarUrl);
         return;
     }
     if (game.in_stalemate() || game.in_draw()) {
-        recordFinishedMatchIfNeeded(mode, 'draw', game.in_stalemate() ? 'stalemate' : 'draw', opponentName);
+        recordFinishedMatchIfNeeded(mode, 'draw', game.in_stalemate() ? 'stalemate' : 'draw', opponentName, opponentAvatarUrl);
     }
 }
 
