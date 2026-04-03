@@ -16,6 +16,8 @@ const SITE_NAME = 'ATChess Live';
 const DISCONNECT_GRACE_MS = 25_000;
 const HTTP_RATE_LIMIT_WINDOW_MS = 60_000;
 const HTTP_RATE_LIMIT_MAX = 240;
+const DEFAULT_TIME_CONTROL_MS = 300_000;
+const MAX_TIME_CONTROL_MS = 86_400_000;
 const ROOM_CODE_LENGTH = 8;
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
 const rateLimitBuckets = new Map();
@@ -285,6 +287,13 @@ function createRoom(roomId, timeControlMs = 300000) {
     return room;
 }
 
+function normalizeTimeControlMs(value) {
+    if (!Number.isFinite(value)) return DEFAULT_TIME_CONTROL_MS;
+    const normalized = Math.round(value);
+    if (normalized < 0) return DEFAULT_TIME_CONTROL_MS;
+    return Math.min(normalized, MAX_TIME_CONTROL_MS);
+}
+
 function isRoomActive(room) {
     return !!room && !room.resigned && !room.timeoutWinner && !room.game.isGameOver();
 }
@@ -523,7 +532,7 @@ io.on('connection', (socket) => {
         if (!allowSocketAction(socket, 'create_room', 8, 60_000, callback)) return;
 
         const roomId = generateUniqueRoomId();
-        const initialTime = typeof timeControlMs === 'number' ? timeControlMs : 300000;
+        const initialTime = normalizeTimeControlMs(timeControlMs);
         const room = createRoom(roomId, initialTime);
         const seat = createSeat('white', socket, deviceId);
         seat.profile = sanitizeProfile(profile);
@@ -706,8 +715,14 @@ io.on('connection', (socket) => {
         room.timeoutWinner = null;
         room.lastMove = null;
 
-        clearSeatState(room.players.white);
-        clearSeatState(room.players.black);
+        for (const color of ['white', 'black']) {
+            const seat = room.players[color];
+            if (!seat) continue;
+            clearSeatState(seat);
+            if (!seat.connected || !seat.socketId) {
+                room.players[color] = null;
+            }
+        }
 
         emitRoomState(normalizedId);
         callback({ ok: true, state: serializeRoom(room) });

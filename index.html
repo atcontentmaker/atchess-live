@@ -1377,6 +1377,9 @@
             <button class="auth-close" type="button" onclick="closeAuthModal()">&times;</button>
         </div>
         <div class="auth-helper">Use email OTP or continue with Google. This is powered by Supabase Auth so you do not need to build mail delivery yourself.</div>
+        <div class="auth-note">We use Supabase Auth to deliver secure sign-in codes.</div>
+        <div class="auth-note">The email may mention Supabase, but the code is for your ATChess account.</div>
+        <div class="auth-note">You will never be asked for your password.</div>
         <div class="auth-profile-grid">
             <input class="auth-input" id="auth-display-name-input" type="text" maxlength="30" placeholder="Username">
             <input class="auth-input" id="auth-avatar-url-input" type="url" placeholder="Profile photo URL">
@@ -1449,6 +1452,7 @@ const THEME_IDS = ['modern-green', 'classic-brown', 'lilac-pink', 'electric-blue
 const APP_STATE_STORAGE_KEY = 'atchess-app-state';
 const DEVICE_ID_STORAGE_KEY = 'atchess-device-id';
 const ROOM_CREDENTIALS_STORAGE_KEY = 'atchess-room-credentials';
+const ONLINE_RECONNECT_GRACE_SECONDS = 25;
 
 function createPersistentId() {
     if (window.crypto?.randomUUID) return window.crypto.randomUUID();
@@ -1695,7 +1699,7 @@ function attemptRoomReconnect(showMessage = false) {
     if (!socket || !onlineRoomId || reconnectAttemptInFlight) return;
     const payload = buildJoinRoomPayload(onlineRoomId);
     if (!payload.reconnectToken) {
-        setOnlineStatus('Disconnected. Rejoin with the room code on this device within 10 seconds.', false);
+        setOnlineStatus(`Disconnected. Rejoin with the room code on this device within ${ONLINE_RECONNECT_GRACE_SECONDS} seconds.`, false);
         return;
     }
     reconnectAttemptInFlight = true;

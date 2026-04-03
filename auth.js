@@ -1,4 +1,4 @@
-(function () {
+﻿(function () {
     'use strict';
 
     const config = window.ATCHESS_AUTH_CONFIG || {};
@@ -256,7 +256,7 @@
     function fillProfileInputs(user) {
         if (authDisplayNameInput) authDisplayNameInput.value = user ? getProfileDisplayName(user) : '';
         if (authAvatarUrlInput) authAvatarUrlInput.value = user ? getProfileAvatarUrl(user) : '';
-        clearAvatarEditor();
+        maybeLoadAvatarUrlForEditing();
     }
 
     function formatHistoryDate(value) {
@@ -282,14 +282,28 @@
         rows.forEach((row) => {
             const item = document.createElement('div');
             item.className = 'match-history-item';
+
             const resultClass = row.result === 'win' ? 'win' : row.result === 'loss' ? 'loss' : 'draw';
-            item.innerHTML = `
-                <div class="match-history-meta">
-                    <div class="match-history-opponent">${row.opponent_name || 'Unknown Opponent'}</div>
-                    <div class="match-history-detail">${(row.mode || 'game').toUpperCase()} · ${(row.reason || 'result').toUpperCase()} · ${formatHistoryDate(row.played_at)}</div>
-                </div>
-                <div class="match-history-result ${resultClass}">${row.result || 'draw'}</div>
-            `;
+
+            const meta = document.createElement('div');
+            meta.className = 'match-history-meta';
+
+            const opponent = document.createElement('div');
+            opponent.className = 'match-history-opponent';
+            opponent.textContent = row.opponent_name || 'Unknown Opponent';
+
+            const detail = document.createElement('div');
+            detail.className = 'match-history-detail';
+            detail.textContent = `${(row.mode || 'game').toUpperCase()} · ${(row.reason || 'result').toUpperCase()} · ${formatHistoryDate(row.played_at)}`;
+
+            const result = document.createElement('div');
+            result.className = `match-history-result ${resultClass}`;
+            result.textContent = row.result || 'draw';
+
+            meta.appendChild(opponent);
+            meta.appendChild(detail);
+            item.appendChild(meta);
+            item.appendChild(result);
             matchHistoryList.appendChild(item);
         });
     }
@@ -649,3 +663,4 @@
     emitAuthProfile(null);
     initAuth();
 })();
+
