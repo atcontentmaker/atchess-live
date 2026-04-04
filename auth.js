@@ -78,6 +78,37 @@
         'atchess live',
         'stockfish'
     ]);
+    let pendingAuthStatus = '';
+    let pendingAuthStatusTone = '';
+
+    function getAuthRedirectUrl() {
+        const { origin, pathname } = window.location;
+        const normalizedPath = pathname && pathname !== '/' ? pathname : '/';
+        return `${origin}${normalizedPath.endsWith('/') ? normalizedPath : `${normalizedPath}/`}`;
+    }
+
+    function clearAuthCallbackParams() {
+        const cleanUrl = `${window.location.origin}${window.location.pathname}${window.location.hash || ''}`;
+        window.history.replaceState({}, document.title, cleanUrl);
+    }
+
+    function readAuthCallbackMessage() {
+        const params = new URLSearchParams(window.location.search);
+        const errorCode = params.get('error_code');
+        const description = params.get('error_description') || '';
+        if (!errorCode) return;
+
+        if (errorCode === 'bad_oauth_state') {
+            pendingAuthStatus = 'Google sign-in expired or got interrupted. Please try again from this page.';
+            pendingAuthStatusTone = 'error';
+            clearAuthCallbackParams();
+            return;
+        }
+
+        pendingAuthStatus = decodeURIComponent(description.replace(/\+/g, ' ')) || 'Sign-in could not be completed.';
+        pendingAuthStatusTone = 'error';
+        clearAuthCallbackParams();
+    }
 
     function getProfileDisplayName(user) {
         if (!user) return null;
@@ -571,6 +602,34 @@
     async function handleSession() {
         if (!supabaseClient) return;
         try {
+            const { data: sessionData, error: sessionError } = await supabaseClient.auth.getSession();
+            if (sessionError) {
+                const message = formatAuthError(sessionError, 'Could not read account session.');
+                if (message.includes('temporarily unavailable')) {
+                    setAuthBackendAvailability(false, message);
+                } else {
+                    setAuthStatus(message, 'error');
+                }
+                return;
+            }
+
+            const session = sessionData?.session || null;
+            if (!session) {
+                currentUser = null;
+                setAuthBackendAvailability(true);
+                updateAuthUI();
+                emitAuthProfile(currentUser);
+                await loadMatchHistory();
+                if (pendingAuthStatus) {
+                    setAuthStatus(pendingAuthStatus, pendingAuthStatusTone);
+                    pendingAuthStatus = '';
+                    pendingAuthStatusTone = '';
+                } else {
+                    setAuthStatus('Auth is optional. You can keep playing as a guest.');
+                }
+                return;
+            }
+
             const { data, error } = await supabaseClient.auth.getUser();
             if (error) {
                 const message = formatAuthError(error, 'Could not read account session.');
@@ -588,6 +647,10 @@
             await loadMatchHistory();
             if (currentUser) {
                 setAuthStatus(`Signed in as ${currentUser.email || describeUser(currentUser)}.`, 'success');
+            } else if (pendingAuthStatus) {
+                setAuthStatus(pendingAuthStatus, pendingAuthStatusTone);
+                pendingAuthStatus = '';
+                pendingAuthStatusTone = '';
             }
         } catch (error) {
             setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
@@ -680,7 +743,7 @@
                 email,
                 options: {
                     shouldCreateUser: true,
-                    emailRedirectTo: window.location.origin
+                    emailRedirectTo: getAuthRedirectUrl()
                 }
             });
             setButtonBusy(authSendOtpBtn, false, 'Sending...', 'Send OTP');
@@ -805,7 +868,7 @@
             const { error } = await supabaseClient.auth.signInWithOAuth({
                 provider: 'google',
                 options: {
-                    redirectTo: window.location.origin
+                    redirectTo: getAuthRedirectUrl()
                 }
             });
             setButtonBusy(authGoogleBtn, false, 'Redirecting...', 'Continue with Google');
@@ -843,6 +906,8 @@
                 detectSessionInUrl: true
             }
         });
+
+        readAuthCallbackMessage();
 
         supabaseClient.auth.onAuthStateChange((_event, session) => {
             currentUser = session?.user || null;
