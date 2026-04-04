@@ -759,7 +759,7 @@
             }
 
             setAuthBackendAvailability(true);
-            setAuthStatus(`OTP sent to ${email}. If Supabase is still using magic links, switch the email template to token mode first.`, 'success');
+            setAuthStatus(`Verification code sent to ${email}. Enter the 8-digit code here. If Supabase is still using magic links, switch the email template to token mode first.`, 'success');
         } catch (error) {
             setButtonBusy(authSendOtpBtn, false, 'Sending...', 'Send OTP');
             setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
