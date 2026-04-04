@@ -53,6 +53,7 @@
     let supabaseClient = null;
     let currentUser = null;
     let authBackendUnavailable = false;
+    let usernameRegistryReady = true;
     let cropSourceUrl = '';
     let cropImageState = {
         naturalWidth: 0,
@@ -65,6 +66,7 @@
     let dragState = null;
     const MAX_USERNAME_LENGTH = 24;
     const MAX_AVATAR_FILE_BYTES = 5 * 1024 * 1024;
+    const USER_PROFILES_TABLE = 'user_profiles';
     const RESERVED_USERNAMES = new Set([
         'admin',
         'administrator',
@@ -78,8 +80,36 @@
         'atchess live',
         'stockfish'
     ]);
+    const BLOCKED_USERNAME_TERMS = [
+        'fuck',
+        'fucking',
+        'fucker',
+        'shit',
+        'shitty',
+        'bitch',
+        'bastard',
+        'asshole',
+        'motherfucker',
+        'cock',
+        'cunt',
+        'pussy',
+        'whore',
+        'slut',
+        'nigger',
+        'nigga',
+        'faggot',
+        'retard',
+        'porn'
+    ];
     let pendingAuthStatus = '';
     let pendingAuthStatusTone = '';
+    let usernameAvailabilityToken = 0;
+    let usernameAvailabilityTimeout = null;
+    let usernameAvailabilityState = {
+        normalized: '',
+        available: null,
+        message: ''
+    };
 
     function getAuthRedirectUrl() {
         const { origin, pathname } = window.location;
@@ -161,6 +191,31 @@
             .slice(0, MAX_USERNAME_LENGTH);
     }
 
+    function normalizeUsernameRegistryKey(rawValue) {
+        return normalizeUsername(rawValue).toLowerCase();
+    }
+
+    function compactUsernameForModeration(rawValue) {
+        return normalizeUsername(rawValue)
+            .toLowerCase()
+            .replace(/[@4]/g, 'a')
+            .replace(/[3]/g, 'e')
+            .replace(/[1!|]/g, 'i')
+            .replace(/[0]/g, 'o')
+            .replace(/[5$]/g, 's')
+            .replace(/[7]/g, 't')
+            .replace(/[^a-z0-9]/g, '');
+    }
+
+    function containsBlockedUsernameTerm(rawValue) {
+        const normalized = normalizeUsername(rawValue).toLowerCase();
+        const compact = compactUsernameForModeration(rawValue);
+        return BLOCKED_USERNAME_TERMS.some((term) => {
+            const plain = term.toLowerCase();
+            return normalized.includes(plain) || compact.includes(plain.replace(/[^a-z0-9]/g, ''));
+        });
+    }
+
     function validateUsername(rawValue) {
         const normalized = normalizeUsername(rawValue);
         const lowered = normalized.toLowerCase();
@@ -177,7 +232,46 @@
         if (RESERVED_USERNAMES.has(lowered)) {
             return { valid: false, normalized, message: 'That username is reserved. Pick another one.' };
         }
+        if (containsBlockedUsernameTerm(normalized)) {
+            return { valid: false, normalized, message: 'Choose a cleaner username. Swearing or explicit names are not allowed.' };
+        }
         return { valid: true, normalized, message: 'Looks good.' };
+    }
+
+    async function fetchUsernameOwner(normalizedUsername) {
+        if (!supabaseClient || !currentUser || !usernameRegistryReady) return null;
+        const { data, error } = await supabaseClient
+            .from(USER_PROFILES_TABLE)
+            .select('user_id')
+            .eq('normalized_username', normalizedUsername)
+            .maybeSingle();
+
+        if (error) {
+            const lowered = String(error.message || '').toLowerCase();
+            if (lowered.includes('relation') || lowered.includes('schema cache')) {
+                usernameRegistryReady = false;
+                return null;
+            }
+            throw error;
+        }
+
+        return data?.user_id || null;
+    }
+
+    async function checkUsernameAvailability(rawValue) {
+        const validation = validateUsername(rawValue);
+        if (!validation.valid || !supabaseClient || !currentUser || authBackendUnavailable || !usernameRegistryReady) {
+            return { state: 'idle', message: validation.message, normalized: validation.normalized };
+        }
+
+        const normalizedUsername = normalizeUsernameRegistryKey(validation.normalized);
+        const ownerId = await fetchUsernameOwner(normalizedUsername);
+        const available = !ownerId || ownerId === currentUser.id;
+        return {
+            state: available ? 'available' : 'taken',
+            normalized: validation.normalized,
+            message: available ? 'Looks good and is available.' : 'That username is already taken.'
+        };
     }
 
     function formatAuthError(error, fallbackMessage) {
@@ -226,16 +320,71 @@
         const validation = validateUsername(authDisplayNameInput.value);
         authDisplayNameInput.value = validation.normalized;
         if (authUsernameCount) authUsernameCount.textContent = `${validation.normalized.length} / ${MAX_USERNAME_LENGTH}`;
-        if (authUsernameFeedback) authUsernameFeedback.textContent = validation.message;
+        let feedbackMessage = validation.message;
+        if (validation.valid && usernameAvailabilityState.normalized === validation.normalized) {
+            feedbackMessage = usernameAvailabilityState.message || feedbackMessage;
+        } else if (validation.valid && currentUser && usernameRegistryReady) {
+            feedbackMessage = 'Checking availability...';
+        } else if (validation.valid && currentUser && !usernameRegistryReady) {
+            feedbackMessage = 'Availability check will turn on after the username SQL is installed.';
+        }
+        if (authUsernameFeedback) authUsernameFeedback.textContent = feedbackMessage;
         if (authUsernameMeta) {
             authUsernameMeta.classList.toggle('error', !validation.valid);
-            authUsernameMeta.classList.toggle('success', validation.valid);
+            authUsernameMeta.classList.toggle('success', validation.valid && usernameAvailabilityState.message !== 'That username is already taken.');
         }
-        authDisplayNameInput.classList.toggle('invalid', !validation.valid);
+        const isTaken = usernameAvailabilityState.normalized === validation.normalized && usernameAvailabilityState.message === 'That username is already taken.';
+        authDisplayNameInput.classList.toggle('invalid', !validation.valid || isTaken);
         if (authSaveProfileBtn && !authBackendUnavailable) {
-            authSaveProfileBtn.disabled = !currentUser || !validation.valid;
+            authSaveProfileBtn.disabled = !currentUser || !validation.valid || isTaken;
         }
-        return validation.valid;
+        return validation.valid && !isTaken;
+    }
+
+    function scheduleUsernameAvailabilityCheck() {
+        if (!authDisplayNameInput) return;
+        const validation = validateUsername(authDisplayNameInput.value);
+        usernameAvailabilityState = {
+            normalized: validation.normalized,
+            available: null,
+            message: validation.message
+        };
+        if (usernameAvailabilityTimeout) {
+            clearTimeout(usernameAvailabilityTimeout);
+            usernameAvailabilityTimeout = null;
+        }
+        if (!validation.valid || !currentUser || !supabaseClient || authBackendUnavailable || !usernameRegistryReady) {
+            refreshUsernameMeta();
+            return;
+        }
+
+        const requestId = ++usernameAvailabilityToken;
+        usernameAvailabilityTimeout = setTimeout(async () => {
+            try {
+                const result = await checkUsernameAvailability(validation.normalized);
+                if (requestId !== usernameAvailabilityToken) return;
+                usernameAvailabilityState = {
+                    normalized: result.normalized,
+                    available: result.state === 'available',
+                    message: result.message
+                };
+                refreshUsernameMeta();
+            } catch (error) {
+                if (requestId !== usernameAvailabilityToken) return;
+                const message = formatAuthError(error, 'Could not verify username availability.');
+                usernameAvailabilityState = {
+                    normalized: validation.normalized,
+                    available: null,
+                    message
+                };
+                if (message.includes('temporarily unavailable')) {
+                    setAuthBackendAvailability(false, message);
+                } else {
+                    refreshUsernameMeta();
+                }
+            }
+        }, 250);
+        refreshUsernameMeta();
     }
 
     function refreshAccountPreview() {
@@ -816,6 +965,7 @@
         }
 
         const validation = validateUsername(authDisplayNameInput?.value);
+        scheduleUsernameAvailabilityCheck();
         refreshUsernameMeta();
         if (!validation.valid) {
             setAuthStatus(validation.message, 'error');
@@ -823,10 +973,64 @@
         }
 
         const displayName = validation.normalized;
+        const normalizedUsername = normalizeUsernameRegistryKey(displayName);
         const avatarUrl = authAvatarUrlInput?.value?.trim();
 
         try {
             setButtonBusy(authSaveProfileBtn, true, 'Saving...', 'Save Profile');
+            const { data: previousRegistryRow, error: previousRegistryError } = await supabaseClient
+                .from(USER_PROFILES_TABLE)
+                .select('username, normalized_username, avatar_url')
+                .eq('user_id', currentUser.id)
+                .maybeSingle();
+
+            if (previousRegistryError) {
+                const lowered = String(previousRegistryError.message || '').toLowerCase();
+                if (lowered.includes('relation') || lowered.includes('schema cache')) {
+                    usernameRegistryReady = false;
+                    setButtonBusy(authSaveProfileBtn, false, 'Saving...', 'Save Profile');
+                    setAuthStatus('Install the username registry SQL first so duplicate usernames can be blocked.', 'error');
+                    return;
+                }
+                throw previousRegistryError;
+            }
+
+            const { error: profileRegistryError } = await supabaseClient
+                .from(USER_PROFILES_TABLE)
+                .upsert(
+                    {
+                        user_id: currentUser.id,
+                        username: displayName,
+                        normalized_username: normalizedUsername,
+                        avatar_url: avatarUrl || null
+                    },
+                    {
+                        onConflict: 'user_id'
+                    }
+                );
+
+            if (profileRegistryError) {
+                const lowered = String(profileRegistryError.message || '').toLowerCase();
+                if (lowered.includes('duplicate key value') || lowered.includes('duplicate')) {
+                    usernameAvailabilityState = {
+                        normalized: displayName,
+                        available: false,
+                        message: 'That username is already taken.'
+                    };
+                    setButtonBusy(authSaveProfileBtn, false, 'Saving...', 'Save Profile');
+                    refreshUsernameMeta();
+                    setAuthStatus('That username is already taken. Pick another one.', 'error');
+                    return;
+                }
+                if (lowered.includes('relation') || lowered.includes('schema cache')) {
+                    usernameRegistryReady = false;
+                    setButtonBusy(authSaveProfileBtn, false, 'Saving...', 'Save Profile');
+                    setAuthStatus('Install the username registry SQL first so duplicate usernames can be blocked.', 'error');
+                    return;
+                }
+                throw profileRegistryError;
+            }
+
             const { data, error } = await supabaseClient.auth.updateUser({
                 data: {
                     atchess_display_name: displayName,
@@ -836,6 +1040,26 @@
             setButtonBusy(authSaveProfileBtn, false, 'Saving...', 'Save Profile');
 
             if (error) {
+                if (previousRegistryRow) {
+                    await supabaseClient
+                        .from(USER_PROFILES_TABLE)
+                        .upsert(
+                            {
+                                user_id: currentUser.id,
+                                username: previousRegistryRow.username,
+                                normalized_username: previousRegistryRow.normalized_username,
+                                avatar_url: previousRegistryRow.avatar_url || null
+                            },
+                            {
+                                onConflict: 'user_id'
+                            }
+                        );
+                } else {
+                    await supabaseClient
+                        .from(USER_PROFILES_TABLE)
+                        .delete()
+                        .eq('user_id', currentUser.id);
+                }
                 const message = formatAuthError(error, 'Could not save profile.');
                 if (message.includes('temporarily unavailable')) {
                     setAuthBackendAvailability(false, message);
@@ -846,6 +1070,11 @@
             }
 
             currentUser = data?.user || currentUser;
+            usernameAvailabilityState = {
+                normalized: displayName,
+                available: true,
+                message: 'Looks good and is available.'
+            };
             setAuthBackendAvailability(true);
             updateAuthUI();
             emitAuthProfile(currentUser);
@@ -959,7 +1188,7 @@
         reader.readAsDataURL(file);
     });
     authDisplayNameInput?.addEventListener('input', () => {
-        refreshUsernameMeta();
+        scheduleUsernameAvailabilityCheck();
         refreshAccountPreview();
     });
     authAvatarUrlInput?.addEventListener('input', () => {
