@@ -45,6 +45,8 @@
     const authVerifyOtpBtn = document.getElementById('auth-verify-otp-btn');
     const authSaveProfileBtn = document.getElementById('auth-save-profile-btn');
     const authGoogleBtn = document.getElementById('auth-google-btn');
+    const authMicrosoftBtn = document.getElementById('auth-microsoft-btn');
+    const authGithubBtn = document.getElementById('auth-github-btn');
     const authSignoutBtn = document.getElementById('auth-signout-btn');
     const authOpenBtn = document.getElementById('auth-open-btn');
     const matchHistoryList = document.getElementById('match-history-list');
@@ -297,7 +299,9 @@
         if (authSaveProfileBtn) authSaveProfileBtn.disabled = disableActions || !currentUser;
         if (authSendOtpBtn) authSendOtpBtn.disabled = disableActions;
         if (authVerifyOtpBtn) authVerifyOtpBtn.disabled = disableActions;
-        if (authGoogleBtn) authGoogleBtn.disabled = disableActions || !config.googleEnabled;
+        if (authGoogleBtn) authGoogleBtn.disabled = disableActions || config.googleEnabled === false;
+        if (authMicrosoftBtn) authMicrosoftBtn.disabled = disableActions || config.microsoftEnabled === false;
+        if (authGithubBtn) authGithubBtn.disabled = disableActions || config.githubEnabled === false;
         if (authSignoutBtn) authSignoutBtn.disabled = disableActions || !currentUser;
         if (message) setAuthStatus(message, disableActions ? 'error' : 'success');
     }
@@ -1086,24 +1090,25 @@
         }
     }
 
-    async function signInWithGoogle() {
+    async function signInWithProvider(provider, label, button, options = {}) {
         if (!supabaseClient) {
             setAuthStatus('Auth is not configured yet.', 'error');
             return;
         }
 
         try {
-            setButtonBusy(authGoogleBtn, true, 'Redirecting...', 'Continue with Google');
+            setButtonBusy(button, true, 'Redirecting...', `Continue with ${label}`);
             const { error } = await supabaseClient.auth.signInWithOAuth({
-                provider: 'google',
+                provider,
                 options: {
-                    redirectTo: getAuthRedirectUrl()
+                    redirectTo: getAuthRedirectUrl(),
+                    ...options
                 }
             });
-            setButtonBusy(authGoogleBtn, false, 'Redirecting...', 'Continue with Google');
+            setButtonBusy(button, false, 'Redirecting...', `Continue with ${label}`);
 
             if (error) {
-                const message = formatAuthError(error, 'Could not start Google sign-in.');
+                const message = formatAuthError(error, `Could not start ${label} sign-in.`);
                 if (message.includes('temporarily unavailable')) {
                     setAuthBackendAvailability(false, message);
                 } else {
@@ -1111,7 +1116,7 @@
                 }
             }
         } catch (error) {
-            setButtonBusy(authGoogleBtn, false, 'Redirecting...', 'Continue with Google');
+            setButtonBusy(button, false, 'Redirecting...', `Continue with ${label}`);
             setAuthBackendAvailability(false, formatAuthError(error, 'Account services are temporarily unavailable. Try again in a minute.'));
         }
     }
@@ -1152,7 +1157,9 @@
     authSendOtpBtn?.addEventListener('click', sendOtp);
     authVerifyOtpBtn?.addEventListener('click', verifyOtp);
     authSaveProfileBtn?.addEventListener('click', saveProfile);
-    authGoogleBtn?.addEventListener('click', signInWithGoogle);
+    authGoogleBtn?.addEventListener('click', () => signInWithProvider('google', 'Google', authGoogleBtn));
+    authMicrosoftBtn?.addEventListener('click', () => signInWithProvider('azure', 'Microsoft', authMicrosoftBtn, { scopes: 'email openid profile' }));
+    authGithubBtn?.addEventListener('click', () => signInWithProvider('github', 'GitHub', authGithubBtn, { scopes: 'read:user user:email' }));
     authAvatarUploadBtn?.addEventListener('click', () => authAvatarFileInput?.click());
     authAvatarCenterBtn?.addEventListener('click', () => {
         if (!cropSourceUrl) {
@@ -1247,12 +1254,20 @@
         }
     });
 
-    if (!config.googleEnabled && authGoogleBtn) {
+    if (config.googleEnabled === false && authGoogleBtn) {
         authGoogleBtn.disabled = true;
         authGoogleBtn.textContent = 'Google Not Enabled';
     }
+    if (config.microsoftEnabled === false && authMicrosoftBtn) {
+        authMicrosoftBtn.disabled = true;
+        authMicrosoftBtn.textContent = 'Microsoft Not Enabled';
+    }
+    if (config.githubEnabled === false && authGithubBtn) {
+        authGithubBtn.disabled = true;
+        authGithubBtn.textContent = 'GitHub Not Enabled';
+    }
     if (authConfigNote && isConfigured) {
-        authConfigNote.textContent = 'Supabase is configured. Make sure the email template uses the OTP token and Google is enabled in the Supabase dashboard.';
+        authConfigNote.textContent = 'Supabase is configured. Make sure email OTP token mode is on, and enable Google, Microsoft, or GitHub in the Supabase dashboard before using those buttons.';
     }
 
     updateAuthUI();
