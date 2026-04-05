@@ -45,7 +45,6 @@
     const authVerifyOtpBtn = document.getElementById('auth-verify-otp-btn');
     const authSaveProfileBtn = document.getElementById('auth-save-profile-btn');
     const authGoogleBtn = document.getElementById('auth-google-btn');
-    const authMicrosoftBtn = document.getElementById('auth-microsoft-btn');
     const authGithubBtn = document.getElementById('auth-github-btn');
     const authSignoutBtn = document.getElementById('auth-signout-btn');
     const authOpenBtn = document.getElementById('auth-open-btn');
@@ -300,7 +299,6 @@
         if (authSendOtpBtn) authSendOtpBtn.disabled = disableActions;
         if (authVerifyOtpBtn) authVerifyOtpBtn.disabled = disableActions;
         if (authGoogleBtn) authGoogleBtn.disabled = disableActions || config.googleEnabled === false;
-        if (authMicrosoftBtn) authMicrosoftBtn.disabled = disableActions || config.microsoftEnabled === false;
         if (authGithubBtn) authGithubBtn.disabled = disableActions || config.githubEnabled === false;
         if (authSignoutBtn) authSignoutBtn.disabled = disableActions || !currentUser;
         if (message) setAuthStatus(message, disableActions ? 'error' : 'success');
@@ -1158,7 +1156,6 @@
     authVerifyOtpBtn?.addEventListener('click', verifyOtp);
     authSaveProfileBtn?.addEventListener('click', saveProfile);
     authGoogleBtn?.addEventListener('click', () => signInWithProvider('google', 'Google', authGoogleBtn));
-    authMicrosoftBtn?.addEventListener('click', () => signInWithProvider('azure', 'Microsoft', authMicrosoftBtn, { scopes: 'email openid profile' }));
     authGithubBtn?.addEventListener('click', () => signInWithProvider('github', 'GitHub', authGithubBtn, { scopes: 'read:user user:email' }));
     authAvatarUploadBtn?.addEventListener('click', () => authAvatarFileInput?.click());
     authAvatarCenterBtn?.addEventListener('click', () => {
@@ -1258,16 +1255,12 @@
         authGoogleBtn.disabled = true;
         authGoogleBtn.textContent = 'Google Not Enabled';
     }
-    if (config.microsoftEnabled === false && authMicrosoftBtn) {
-        authMicrosoftBtn.disabled = true;
-        authMicrosoftBtn.textContent = 'Microsoft Not Enabled';
-    }
     if (config.githubEnabled === false && authGithubBtn) {
         authGithubBtn.disabled = true;
         authGithubBtn.textContent = 'GitHub Not Enabled';
     }
     if (authConfigNote && isConfigured) {
-        authConfigNote.textContent = 'Supabase is configured. Make sure email OTP token mode is on, and enable Google, Microsoft, or GitHub in the Supabase dashboard before using those buttons.';
+        authConfigNote.textContent = 'Supabase is configured. Make sure email OTP token mode is on, and enable Google or GitHub in the Supabase dashboard before using those buttons.';
     }
 
     updateAuthUI();
