@@ -5,7 +5,7 @@ This project uses third-party software and services. This file is an attribution
 ## Stockfish.js 18 / Stockfish
 - Used for engine play.
 - Bundled runtime header credits Chess.com, LLC for `stockfish.js` and notes it is based on Stockfish by T. Romstad, M. Costalba, J. Kiiski, G. Linscott, and other contributors.
-- License noted in bundled file: GPLv3.
+- The bundled engine file "stockfish-18-lite-single.js" states License: GPLv3.
 - Sources:
   - https://github.com/nmrugg/stockfish.js
   - https://github.com/official-stockfish/Stockfish
@@ -34,6 +34,15 @@ This project uses third-party software and services. This file is an attribution
 - Sources:
   - https://supabase.com/
   - https://github.com/supabase/supabase-js
+
+## AI Development Assistance
+- Used during planning, debugging, and wording help while building ATChess Live.
+- Credited here as development assistants, not code dependencies or endorsements.
+- Sources:
+  - https://chatgpt.com/
+  - https://openai.com/codex/
+  - https://gemini.google.com/
+  - https://claude.ai/
 
 ## Font Awesome Free
 - Used for interface icons.
