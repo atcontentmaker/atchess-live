@@ -2706,6 +2706,13 @@ function handleSquareClick(pos) {
         return;
     }
     if (selectedSquare) {
+        const piece = game.get(pos);
+        if (piece && piece.color === game.turn()) {
+            selectedSquare = pos;
+            createBoard();
+            highlightLegalMoves(pos);
+            return;
+        }
         makeMove(selectedSquare, pos);
     } else {
         const piece = game.get(pos);
