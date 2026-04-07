@@ -534,47 +534,171 @@
             flex-direction: column;
             gap: 10px;
         }
-        .about-card {
-            margin-top: 10px;
-            padding: 14px;
-            border: 1px solid var(--border);
-            border-radius: var(--radius-sm);
-            background:
-                radial-gradient(circle at top right, rgba(212,175,55,0.16), transparent 42%),
-                linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
+        .sidebar-header-actions {
             display: flex;
-            flex-direction: column;
+            align-items: center;
             gap: 8px;
         }
-        .about-kicker {
+        .info-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.04);
+            color: var(--accent);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: transform 0.18s ease, border-color 0.18s ease, background 0.18s ease;
+        }
+        .info-btn:hover {
+            transform: translateY(-1px);
+            border-color: var(--accent);
+            background: rgba(212,175,55,0.08);
+        }
+        .info-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 8, 6, 0.78);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 18px;
+            z-index: 60;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.18s ease;
+        }
+        .info-modal.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .info-card {
+            width: min(920px, 100%);
+            max-height: min(78vh, 760px);
+            overflow: auto;
+            background:
+                radial-gradient(circle at top right, rgba(212,175,55,0.16), transparent 34%),
+                linear-gradient(180deg, rgba(28,24,19,0.98), rgba(17,14,11,0.98));
+            border: 1px solid rgba(212,175,55,0.28);
+            border-radius: calc(var(--radius) + 4px);
+            box-shadow: var(--shadow);
+            padding: 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 18px;
+        }
+        .info-head {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+        }
+        .info-kicker {
             font-size: 10px;
             font-weight: 800;
-            letter-spacing: 0.14em;
+            letter-spacing: 0.16em;
             text-transform: uppercase;
             color: var(--text-3);
         }
-        .about-name {
+        .info-title {
             font-family: "Syne", sans-serif;
-            font-size: 22px;
+            font-size: clamp(24px, 3vw, 34px);
+            font-weight: 800;
+            color: var(--text-1);
+            margin-top: 4px;
+        }
+        .info-subtitle {
+            margin-top: 6px;
+            color: var(--text-2);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .info-grid {
+            display: grid;
+            grid-template-columns: minmax(0, 0.9fr) 1px minmax(0, 1.1fr);
+            gap: 18px;
+            align-items: stretch;
+        }
+        .info-divider-line {
+            background: linear-gradient(180deg, transparent, rgba(212,175,55,0.45), transparent);
+            border-radius: 999px;
+        }
+        .info-section {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .info-section-title {
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--accent);
+        }
+        .info-name {
+            font-family: "Syne", sans-serif;
+            font-size: 28px;
             font-weight: 800;
             color: var(--text-1);
         }
-        .about-desc {
+        .info-lines {
             display: flex;
             flex-direction: column;
-            gap: 2px;
-            font-size: 13px;
-            line-height: 1.5;
+            gap: 4px;
             color: var(--text-2);
+            font-size: 14px;
+            line-height: 1.6;
         }
-        .about-email {
-            font-size: 12px;
+        .info-email {
             color: var(--accent);
             text-decoration: none;
             word-break: break-word;
+            font-size: 13px;
         }
-        .about-email:hover {
+        .info-email:hover {
             text-decoration: underline;
+        }
+        .credit-list {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .credit-item {
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background: rgba(255,255,255,0.025);
+        }
+        .credit-item strong {
+            color: var(--text-1);
+        }
+        .credit-meta,
+        .credit-note {
+            margin-top: 4px;
+            font-size: 12px;
+            line-height: 1.6;
+            color: var(--text-2);
+        }
+        .credit-links {
+            margin-top: 5px;
+            font-size: 12px;
+            line-height: 1.6;
+        }
+        .credit-links a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .credit-links a:hover {
+            text-decoration: underline;
+        }
+        .info-legal-note {
+            padding-top: 4px;
+            border-top: 1px solid var(--border);
+            color: var(--text-3);
+            font-size: 12px;
+            line-height: 1.7;
         }
         .auth-identity {
             display: flex;
@@ -1484,6 +1608,14 @@
                 max-height: none;
                 min-height: 420px;
             }
+            .info-grid {
+                grid-template-columns: 1fr;
+            }
+            .info-divider-line {
+                height: 1px;
+                width: 100%;
+                background: linear-gradient(90deg, transparent, rgba(212,175,55,0.45), transparent);
+            }
             #moveList {
                 max-height: 34vh;
             }
@@ -1578,7 +1710,12 @@
     <div class="sidebar">
         <div class="sidebar-header">
             <span>Moves</span>
-            <span class="move-count-badge" id="move-count-badge">0</span>
+            <div class="sidebar-header-actions">
+                <button class="info-btn" type="button" aria-label="About and credits" onclick="openInfoModal()">
+                    <i class="fa-solid fa-circle-info"></i>
+                </button>
+                <span class="move-count-badge" id="move-count-badge">0</span>
+            </div>
         </div>
 
         <div id="moveList"></div>
@@ -1629,16 +1766,6 @@
                     <button class="auth-btn-primary" id="auth-open-btn" onclick="openAuthModal()">Create / Sign In</button>
                     <button class="auth-btn-secondary" id="auth-signout-btn" onclick="signOutAccount()" disabled>Sign Out</button>
                 </div>
-            </div>
-
-            <div class="about-card">
-                <div class="about-kicker">About Me</div>
-                <div class="about-name">AT</div>
-                <div class="about-desc">
-                    <span>I build ATChess Live for simple, smooth online chess.</span>
-                    <span>I care about making it clean, fun, and easy to use.</span>
-                </div>
-                <a class="about-email" href="mailto:atchesslegit@gmail.com">atchesslegit@gmail.com</a>
             </div>
 
             <div class="control-grid">
@@ -1770,6 +1897,84 @@
         <div class="match-history-list" id="match-history-list">
             <div class="auth-note" id="match-history-empty">Sign in to load account match history.</div>
         </div>
+</div>
+</div>
+
+<div class="info-modal" id="info-modal" aria-hidden="true">
+    <div class="info-card">
+        <div class="info-head">
+            <div>
+                <div class="info-kicker">Info</div>
+                <div class="info-title">About & Credits</div>
+                <div class="info-subtitle">A quick creator section on one side and the project credits on the other, separated cleanly so the notices are easy to read.</div>
+            </div>
+            <button class="auth-close" type="button" onclick="closeInfoModal()">&times;</button>
+        </div>
+
+        <div class="info-grid">
+            <div class="info-section">
+                <div class="info-section-title">About Me</div>
+                <div class="info-name">AT</div>
+                <div class="info-lines">
+                    <span>I build ATChess Live for simple, smooth online chess.</span>
+                    <span>I care about making it clean, fun, and easy to use.</span>
+                </div>
+                <a class="info-email" href="mailto:atchesslegit@gmail.com">atchesslegit@gmail.com</a>
+            </div>
+
+            <div class="info-divider-line" aria-hidden="true"></div>
+
+            <div class="info-section">
+                <div class="info-section-title">Credits</div>
+                <div class="credit-list">
+                    <div class="credit-item">
+                        <strong>Stockfish.js 18 / Stockfish</strong>
+                        <div class="credit-meta">Used for engine play. The bundled runtime credits Chess.com, LLC for Stockfish.js and notes it is based on Stockfish by T. Romstad, M. Costalba, J. Kiiski, G. Linscott, and other contributors.</div>
+                        <div class="credit-note">License noted in the bundled file: GPLv3.</div>
+                        <div class="credit-links"><a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener noreferrer">stockfish.js source</a> · <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener noreferrer">Stockfish source</a></div>
+                    </div>
+                    <div class="credit-item">
+                        <strong>chess.js</strong>
+                        <div class="credit-meta">Move generation, legal move validation, FEN and PGN support.</div>
+                        <div class="credit-note">License: BSD-2-Clause. Copyright Jeff Hlywa.</div>
+                        <div class="credit-links"><a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener noreferrer">Project page</a></div>
+                    </div>
+                    <div class="credit-item">
+                        <strong>Socket.IO</strong>
+                        <div class="credit-meta">Realtime room and multiplayer connection layer.</div>
+                        <div class="credit-note">License: MIT. Copyright Guillermo Rauch and Socket.IO contributors.</div>
+                        <div class="credit-links"><a href="https://socket.io/" target="_blank" rel="noopener noreferrer">Project page</a></div>
+                    </div>
+                    <div class="credit-item">
+                        <strong>Express</strong>
+                        <div class="credit-meta">Node server and app routing.</div>
+                        <div class="credit-note">License: MIT. Copyright TJ Holowaychuk, Roman Shtylman, Douglas Christopher Wilson, and contributors.</div>
+                        <div class="credit-links"><a href="https://expressjs.com/" target="_blank" rel="noopener noreferrer">Project page</a></div>
+                    </div>
+                    <div class="credit-item">
+                        <strong>Supabase JS / Supabase Auth</strong>
+                        <div class="credit-meta">Authentication, sessions, and account data.</div>
+                        <div class="credit-note">Open-source client SDK and hosted backend service.</div>
+                        <div class="credit-links"><a href="https://supabase.com/" target="_blank" rel="noopener noreferrer">Supabase</a> · <a href="https://github.com/supabase/supabase-js" target="_blank" rel="noopener noreferrer">supabase-js</a></div>
+                    </div>
+                    <div class="credit-item">
+                        <strong>Font Awesome Free</strong>
+                        <div class="credit-meta">Used for interface icons, including the info icon and chess-related UI icons.</div>
+                        <div class="credit-note">Font Awesome Free license terms apply.</div>
+                        <div class="credit-links"><a href="https://fontawesome.com/" target="_blank" rel="noopener noreferrer">Project page</a></div>
+                    </div>
+                    <div class="credit-item">
+                        <strong>Google Fonts</strong>
+                        <div class="credit-meta">DM Mono and Syne loaded through Google Fonts.</div>
+                        <div class="credit-links"><a href="https://fonts.google.com/specimen/DM+Mono" target="_blank" rel="noopener noreferrer">DM Mono</a> · <a href="https://fonts.google.com/specimen/Syne" target="_blank" rel="noopener noreferrer">Syne</a></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="info-legal-note">
+            This is an attribution summary, not legal advice. Visible credits help, but some licenses can require more than a page notice. I also added a project notices file so the attributions live with the codebase.
+        </div>
     </div>
 </div>
 
@@ -1881,6 +2086,18 @@ function setOnlineStatus(message, isConnected = false) {
         onlineStatusElement.textContent = message;
         onlineStatusElement.classList.toggle('connected', isConnected);
     }
+}
+
+function openInfoModal() {
+    if (!infoModal) return;
+    infoModal.classList.add('open');
+    infoModal.setAttribute('aria-hidden', 'false');
+}
+
+function closeInfoModal() {
+    if (!infoModal) return;
+    infoModal.classList.remove('open');
+    infoModal.setAttribute('aria-hidden', 'true');
 }
 
 function updatePlayerLabels() {
@@ -2277,6 +2494,7 @@ const timeControlSelect = document.getElementById('time-control');
 const playModeSelect = document.getElementById('play-mode');
 const roomCodeInput = document.getElementById('room-code');
 const onlineStatusElement = document.getElementById('online-status');
+const infoModal = document.getElementById('info-modal');
 const whiteClockElement = document.getElementById('white-clock');
 const blackClockElement = document.getElementById('black-clock');
 const boardColumnElement = document.querySelector('.board-column');
@@ -3063,6 +3281,14 @@ playModeSelect?.addEventListener('change', (event) => {
 });
 roomCodeInput?.addEventListener('input', () => {
     roomCodeInput.value = roomCodeInput.value.toUpperCase();
+});
+infoModal?.addEventListener('click', (event) => {
+    if (event.target === infoModal) closeInfoModal();
+});
+document.addEventListener('keydown', (event) => {
+    if (event.key === 'Escape' && infoModal?.classList.contains('open')) {
+        closeInfoModal();
+    }
 });
 window.addEventListener('beforeunload', saveAppState);
 </script>
