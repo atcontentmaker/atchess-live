@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATChess Live - Third-Party Notices</title>
+    <style>
+        :root {
+            --bg: #110e0b;
+            --panel: #1a1511;
+            --panel-2: #231d17;
+            --text: #f7f0e6;
+            --muted: #c8b8a2;
+            --accent: #d4af37;
+            --border: rgba(212, 175, 55, 0.22);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            background:
+                radial-gradient(circle at top right, rgba(212,175,55,0.12), transparent 26%),
+                linear-gradient(180deg, #17120e, var(--bg));
+            color: var(--text);
+            min-height: 100vh;
+        }
+        .wrap {
+            width: min(980px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 28px 0 60px;
+        }
+        .hero {
+            padding: 26px 24px;
+            border: 1px solid var(--border);
+            border-radius: 22px;
+            background: linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.01));
+            box-shadow: 0 18px 50px rgba(0,0,0,0.24);
+        }
+        .kicker {
+            font-size: 12px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--muted);
+            font-weight: 700;
+        }
+        h1 {
+            margin: 10px 0 12px;
+            font-size: clamp(30px, 5vw, 50px);
+            line-height: 1.05;
+        }
+        .hero p {
+            margin: 0;
+            max-width: 760px;
+            color: var(--muted);
+            font-size: 16px;
+            line-height: 1.7;
+        }
+        .back-link {
+            display: inline-block;
+            margin-top: 18px;
+            color: var(--accent);
+            text-decoration: none;
+            font-weight: 700;
+        }
+        .back-link:hover { text-decoration: underline; }
+        .section {
+            margin-top: 18px;
+            padding: 18px 20px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
+            background: var(--panel);
+        }
+        .section h2 {
+            margin: 0 0 10px;
+            font-size: 22px;
+        }
+        .section p, .section li {
+            color: var(--muted);
+            line-height: 1.7;
+            font-size: 15px;
+        }
+        .credit-grid {
+            display: grid;
+            gap: 14px;
+        }
+        .credit-card {
+            padding: 16px;
+            border: 1px solid var(--border);
+            border-radius: 16px;
+            background: var(--panel-2);
+        }
+        .credit-card h3 {
+            margin: 0 0 8px;
+            font-size: 18px;
+        }
+        .credit-card a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        .credit-card a:hover {
+            text-decoration: underline;
+        }
+        code {
+            background: rgba(255,255,255,0.06);
+            border-radius: 8px;
+            padding: 2px 6px;
+            font-size: 0.95em;
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="hero">
+            <div class="kicker">ATChess Live</div>
+            <h1>Third-Party Notices</h1>
+            <p>This page lists the main third-party software, services, and assets used in the project, along with project links and license notes where applicable. It is an attribution summary, not legal advice.</p>
+            <a class="back-link" href="/">Back to ATChess Live</a>
+        </div>
+
+        <div class="section">
+            <h2>Included Credits</h2>
+            <div class="credit-grid">
+                <div class="credit-card">
+                    <h3>Stockfish.js 18 / Stockfish</h3>
+                    <p>Used for engine play. The bundled runtime credits Chess.com, LLC for <code>stockfish.js</code> and notes it is based on Stockfish by T. Romstad, M. Costalba, J. Kiiski, G. Linscott, and other contributors.</p>
+                    <p>License noted in bundled file: GPLv3.</p>
+                    <p><a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener noreferrer">stockfish.js source</a> · <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener noreferrer">Stockfish source</a></p>
+                </div>
+
+                <div class="credit-card">
+                    <h3>chess.js</h3>
+                    <p>Used for legal move validation, move generation, and FEN/PGN support.</p>
+                    <p>License: BSD-2-Clause. Copyright Jeff Hlywa.</p>
+                    <p><a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener noreferrer">Project page</a></p>
+                </div>
+
+                <div class="credit-card">
+                    <h3>Socket.IO</h3>
+                    <p>Used for realtime multiplayer connections.</p>
+                    <p>License: MIT. Copyright Guillermo Rauch and Socket.IO contributors.</p>
+                    <p><a href="https://socket.io/" target="_blank" rel="noopener noreferrer">Project page</a></p>
+                </div>
+
+                <div class="credit-card">
+                    <h3>Express</h3>
+                    <p>Used for the Node.js server and routing layer.</p>
+                    <p>License: MIT. Copyright TJ Holowaychuk, Roman Shtylman, Douglas Christopher Wilson, and contributors.</p>
+                    <p><a href="https://expressjs.com/" target="_blank" rel="noopener noreferrer">Project page</a></p>
+                </div>
+
+                <div class="credit-card">
+                    <h3>Supabase JS / Supabase Auth</h3>
+                    <p>Used for authentication, sessions, and account data.</p>
+                    <p><a href="https://supabase.com/" target="_blank" rel="noopener noreferrer">Supabase</a> · <a href="https://github.com/supabase/supabase-js" target="_blank" rel="noopener noreferrer">supabase-js</a></p>
+                </div>
+
+                <div class="credit-card">
+                    <h3>Font Awesome Free</h3>
+                    <p>Used for interface icons.</p>
+                    <p><a href="https://fontawesome.com/" target="_blank" rel="noopener noreferrer">Project page</a></p>
+                </div>
+
+                <div class="credit-card">
+                    <h3>Google Fonts</h3>
+                    <p>Fonts used: DM Mono and Syne.</p>
+                    <p><a href="https://fonts.google.com/specimen/DM+Mono" target="_blank" rel="noopener noreferrer">DM Mono</a> · <a href="https://fonts.google.com/specimen/Syne" target="_blank" rel="noopener noreferrer">Syne</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
