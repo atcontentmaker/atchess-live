@@ -534,6 +534,48 @@
             flex-direction: column;
             gap: 10px;
         }
+        .about-card {
+            margin-top: 10px;
+            padding: 14px;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-sm);
+            background:
+                radial-gradient(circle at top right, rgba(212,175,55,0.16), transparent 42%),
+                linear-gradient(180deg, rgba(255,255,255,0.03), rgba(255,255,255,0.015));
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .about-kicker {
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text-3);
+        }
+        .about-name {
+            font-family: "Syne", sans-serif;
+            font-size: 22px;
+            font-weight: 800;
+            color: var(--text-1);
+        }
+        .about-desc {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            font-size: 13px;
+            line-height: 1.5;
+            color: var(--text-2);
+        }
+        .about-email {
+            font-size: 12px;
+            color: var(--accent);
+            text-decoration: none;
+            word-break: break-word;
+        }
+        .about-email:hover {
+            text-decoration: underline;
+        }
         .auth-identity {
             display: flex;
             align-items: center;
@@ -1589,6 +1631,16 @@
                 </div>
             </div>
 
+            <div class="about-card">
+                <div class="about-kicker">About Me</div>
+                <div class="about-name">AT</div>
+                <div class="about-desc">
+                    <span>I build ATChess Live for simple, smooth online chess.</span>
+                    <span>I care about making it clean, fun, and easy to use.</span>
+                </div>
+                <a class="about-email" href="mailto:atchesslegit@gmail.com">atchesslegit@gmail.com</a>
+            </div>
+
             <div class="control-grid">
                 <div class="diff-wrap">
                     <span class="diff-label">Depth</span>
@@ -1956,6 +2008,24 @@ function hydrateGameFromPGN(pgnText) {
     applyLastMoveFromHistory();
 }
 
+function getMoveSoundKey(moveResult, chessInstance) {
+    if (!moveResult || !chessInstance) return 'move';
+    if (chessInstance.in_checkmate()) return 'checkmate';
+    if (chessInstance.in_check()) return 'check';
+    const flags = moveResult.flags || '';
+    if (flags.includes('k') || flags.includes('q')) return 'castle';
+    if (flags.includes('c') || flags.includes('e')) return 'capture';
+    return 'move';
+}
+
+function playOnlineMoveSound(previousHistoryLength) {
+    if (!window.ChessSounds || typeof window.ChessSounds.play !== 'function') return;
+    const history = game.history({ verbose: true });
+    if (history.length <= previousHistoryLength) return;
+    const latestMove = history[history.length - 1];
+    window.ChessSounds.play(getMoveSoundKey(latestMove, game));
+}
+
 function ensureSocket() {
     if (socket || typeof io !== 'function') return socket;
     socket = io();
@@ -2007,6 +2077,7 @@ function applyOnlineRoomState(state) {
     onlineRoomState = state;
     const nextPGN = state.pgn || '';
     const didGameChange = nextPGN !== lastAppliedOnlinePGN;
+    const previousHistoryLength = game.history().length;
     if (didGameChange) {
         hydrateGameFromPGN(nextPGN);
         lastAppliedOnlinePGN = nextPGN;
@@ -2028,6 +2099,7 @@ function applyOnlineRoomState(state) {
     else if (yourTurn) statusParts.push('Your move');
     setOnlineStatus(statusParts.join(' · '), true);
     if (didGameChange) {
+        playOnlineMoveSound(previousHistoryLength);
         createBoard();
         updateMoveHistory();
     } else {
