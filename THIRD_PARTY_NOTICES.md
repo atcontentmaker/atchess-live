@@ -6,6 +6,7 @@ This project uses third-party software and services. This file is an attribution
 - Used for engine play.
 - Bundled runtime header credits Chess.com, LLC for `stockfish.js` and notes it is based on Stockfish by T. Romstad, M. Costalba, J. Kiiski, G. Linscott, and other contributors.
 - The bundled engine file "stockfish-18-lite-single.js" states License: GPLv3.
+- Public notice page: `/stockfish-gpl-notice.html`
 - Sources:
   - https://github.com/nmrugg/stockfish.js
   - https://github.com/official-stockfish/Stockfish
