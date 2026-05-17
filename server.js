@@ -337,10 +337,44 @@ function getGlobalBan(profile, deviceId = null) {
     return key ? globalBans.get(key) : null;
 }
 
-function addGlobalBan(profile, deviceId = null, reason = '') {
-    getPlayableIdentityKeys(profile, deviceId).forEach((key) => {
-        globalBans.set(key, reason || 'You are banned from ATChess Live.');
+function addGlobalBan(profile, deviceId = null, reason = '', moderatorProfile = null) {
+    const keys = getPlayableIdentityKeys(profile, deviceId);
+    const ban = {
+        id: randomToken(9),
+        keys,
+        reason: reason || 'You are banned from ATChess Live.',
+        deviceId: String(deviceId || '').trim() || null,
+        userId: profile?.userId || null,
+        email: profile?.email || null,
+        displayName: profile?.displayName || null,
+        moderatorEmail: moderatorProfile?.email || null,
+        createdAt: new Date().toISOString()
+    };
+    keys.forEach((key) => {
+        globalBans.set(key, ban);
     });
+    return ban;
+}
+
+function serializeGlobalBans() {
+    const bansById = new Map();
+    for (const ban of globalBans.values()) {
+        bansById.set(ban.id, ban);
+    }
+    return Array.from(bansById.values()).sort((a, b) => String(b.createdAt).localeCompare(String(a.createdAt)));
+}
+
+function removeGlobalBan(banIdOrKey) {
+    const target = String(banIdOrKey || '').trim();
+    if (!target) return false;
+    let removed = false;
+    for (const [key, ban] of Array.from(globalBans.entries())) {
+        if (key === target || ban.id === target) {
+            globalBans.delete(key);
+            removed = true;
+        }
+    }
+    return removed;
 }
 
 function addRoomBan(room, profile, deviceId = null) {
@@ -659,7 +693,7 @@ io.on('connection', (socket) => {
         const sanitizedProfile = sanitizeProfile(profile);
         const globalBan = getGlobalBan(sanitizedProfile, deviceId);
         if (globalBan) {
-            callback({ ok: false, error: globalBan, globalBan: true });
+            callback({ ok: false, error: globalBan.reason, globalBan: true });
             return;
         }
         const room = createRoom(roomId, initialTime);
@@ -698,7 +732,7 @@ io.on('connection', (socket) => {
         }
         const globalBan = getGlobalBan(sanitizedProfile, deviceId);
         if (globalBan) {
-            callback({ ok: false, error: globalBan, globalBan: true });
+            callback({ ok: false, error: globalBan.reason, globalBan: true });
             return;
         }
         if (isRoomBanned(room, sanitizedProfile, deviceId)) {
@@ -936,7 +970,7 @@ io.on('connection', (socket) => {
             return;
         }
 
-        addGlobalBan(targetSeat.profile, targetSeat.deviceId, banReason);
+        const ban = addGlobalBan(targetSeat.profile, targetSeat.deviceId, banReason, requesterSeat.profile);
         removeSeatFromRoom(room, normalizedTargetColor, banReason);
         if (targetSeat.socketId) {
             const targetSocket = io.sockets.sockets.get(targetSeat.socketId);
@@ -944,11 +978,37 @@ io.on('connection', (socket) => {
                 reason: banReason,
                 email: targetSeat.profile?.email || null,
                 userId: targetSeat.profile?.userId || null,
+                deviceId: targetSeat.deviceId || null,
+                banId: ban.id,
                 guest: !targetSeat.profile?.userId && !targetSeat.profile?.email
             });
         }
         emitRoomState(normalizedId);
         callback({ ok: true, state: serializeRoom(room) });
+    });
+
+    socket.on('developer_bans', ({ roomId, action, banId } = {}, callback = () => {}) => {
+        if (!allowSocketAction(socket, 'developer_bans', 20, 60_000, callback)) return;
+
+        const normalizedId = String(roomId || '').trim().toUpperCase();
+        const room = rooms.get(normalizedId);
+        const requesterSeat = room ? getSeatBySocket(room, socket.id) : null;
+        if (!requesterSeat?.profile?.isDeveloper) {
+            callback({ ok: false, error: 'Only developers can view or edit game bans.' });
+            return;
+        }
+
+        if (action === 'unban') {
+            const removed = removeGlobalBan(banId);
+            callback({
+                ok: removed,
+                error: removed ? null : 'Ban entry not found.',
+                bans: serializeGlobalBans()
+            });
+            return;
+        }
+
+        callback({ ok: true, bans: serializeGlobalBans() });
     });
 
     socket.on('leave_room', ({ roomId } = {}, callback = () => {}) => {

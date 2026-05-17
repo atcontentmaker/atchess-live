@@ -1902,6 +1902,7 @@
                 <div class="dev-options-grid">
                     <button class="btn-secondary" type="button" onclick="copyDeveloperSnapshot()">Copy Debug</button>
                     <button class="btn-secondary" type="button" onclick="toggleDeveloperDetails()">Toggle State</button>
+                    <button class="btn-secondary" type="button" onclick="loadDeveloperBans()">View Bans</button>
                 </div>
                 <div class="online-status" id="dev-options-output">Developer tools unlocked.</div>
             </div>
@@ -2221,11 +2222,18 @@ function storeGameBan(details = {}) {
         reason: String(details.reason || 'You are banned from ATChess Live.').slice(0, 1600),
         userId: details.userId || currentAuthProfile?.id || null,
         email: (details.email || currentAuthProfile?.email || '').toLowerCase() || null,
+        deviceId: details.deviceId || null,
+        banId: details.banId || null,
         guestDeviceId: details.guest ? getPersistentDeviceId() : null
     };
     safeLocalStorageSet(GAME_BAN_STORAGE_KEY, JSON.stringify(ban));
     currentGameBan = getActiveStoredGameBan();
     applyGameBanUI();
+}
+
+function clearStoredGameBan() {
+    try { localStorage.removeItem(GAME_BAN_STORAGE_KEY); } catch (e) {}
+    currentGameBan = null;
 }
 
 function getActiveStoredGameBan() {
@@ -2480,8 +2488,8 @@ function ensureSocket() {
         setOnlineStatus(reason || 'You were removed from the room.', false);
         updateModeUI();
     });
-    socket.on('global_ban_applied', ({ reason, email, userId, guest } = {}) => {
-        storeGameBan({ reason, email, userId, guest });
+    socket.on('global_ban_applied', ({ reason, email, userId, deviceId, banId, guest } = {}) => {
+        storeGameBan({ reason, email, userId, deviceId, banId, guest });
     });
     socket.on('disconnect', () => {
         if (currentMode === 'online') setOnlineStatus('Disconnected. Trying to reconnect your seat...', false);
@@ -2596,11 +2604,6 @@ function prepareOnlineMode() {
 }
 
 function createOnlineRoom() {
-    currentGameBan = getActiveStoredGameBan();
-    if (currentGameBan) {
-        applyGameBanUI();
-        return;
-    }
     if (currentMode !== 'online') prepareOnlineMode();
     const socketClient = ensureSocket();
     if (!socketClient) {
@@ -2618,6 +2621,7 @@ function createOnlineRoom() {
             setOnlineStatus(response?.error || 'Could not create room.');
             return;
         }
+        clearStoredGameBan();
         onlineRoomId = response.roomId;
         onlinePlayerColor = response.color || 'white';
         if (response.reconnectToken) rememberRoomCredential(onlineRoomId, onlinePlayerColor, response.reconnectToken);
@@ -2630,11 +2634,6 @@ function createOnlineRoom() {
 }
 
 function joinOnlineRoom() {
-    currentGameBan = getActiveStoredGameBan();
-    if (currentGameBan) {
-        applyGameBanUI();
-        return;
-    }
     if (currentMode !== 'online') prepareOnlineMode();
     const socketClient = ensureSocket();
     const roomId = (roomCodeInput?.value || '').trim().toUpperCase();
@@ -2651,6 +2650,7 @@ function joinOnlineRoom() {
             setOnlineStatus(response?.error || 'Could not join room.');
             return;
         }
+        clearStoredGameBan();
         onlineRoomId = response.roomId;
         onlinePlayerColor = response.color || 'spectator';
         if (response.reconnectToken) rememberRoomCredential(onlineRoomId, onlinePlayerColor, response.reconnectToken);
@@ -2869,6 +2869,64 @@ window.copyDeveloperSnapshot = async function () {
 window.toggleDeveloperDetails = function () {
     if (!currentAuthProfile?.isDeveloper || !devOptionsOutput) return;
     devOptionsOutput.textContent = JSON.stringify(getDeveloperSnapshot());
+};
+
+function renderDeveloperBans(bans) {
+    if (!devOptionsOutput) return;
+    devOptionsOutput.innerHTML = '';
+    if (!bans?.length) {
+        devOptionsOutput.textContent = 'No active game bans.';
+        return;
+    }
+
+    bans.forEach((ban) => {
+        const row = document.createElement('div');
+        row.className = 'match-history-extra-row';
+
+        const label = document.createElement('div');
+        label.className = 'match-history-extra-label';
+        label.textContent = ban.email || ban.userId || ban.displayName || 'Guest device';
+
+        const code = document.createElement('div');
+        code.className = 'match-history-code';
+        code.textContent = `Device ID: ${ban.deviceId || 'Account ban only'} | Reason: ${ban.reason || 'No reason'}`;
+
+        const button = document.createElement('button');
+        button.className = 'auth-btn-secondary';
+        button.type = 'button';
+        button.textContent = 'Unban';
+        button.addEventListener('click', () => unbanDeveloperBan(ban.id));
+
+        row.appendChild(label);
+        row.appendChild(code);
+        row.appendChild(button);
+        devOptionsOutput.appendChild(row);
+    });
+}
+
+window.loadDeveloperBans = function () {
+    if (!currentAuthProfile?.isDeveloper || !socket || !onlineRoomId) {
+        if (devOptionsOutput) devOptionsOutput.textContent = 'Join a room as a developer to view bans.';
+        return;
+    }
+    socket.emit('developer_bans', { roomId: onlineRoomId, action: 'list' }, (response) => {
+        if (!response?.ok) {
+            if (devOptionsOutput) devOptionsOutput.textContent = response?.error || 'Could not load bans.';
+            return;
+        }
+        renderDeveloperBans(response.bans || []);
+    });
+};
+
+window.unbanDeveloperBan = function (banId) {
+    if (!currentAuthProfile?.isDeveloper || !socket || !onlineRoomId) return;
+    socket.emit('developer_bans', { roomId: onlineRoomId, action: 'unban', banId }, (response) => {
+        if (!response?.ok) {
+            if (devOptionsOutput) devOptionsOutput.textContent = response?.error || 'Could not remove ban.';
+            return;
+        }
+        renderDeveloperBans(response.bans || []);
+    });
 };
 
 window.moderateRoomSeat = function (action, targetColor) {
