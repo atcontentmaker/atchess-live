@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ATChess Live - Stockfish GPL Notice</title>
+    <style>
+        :root {
+            --bg: #0f0d0a;
+            --panel: #1a1511;
+            --panel-2: #241d16;
+            --text: #f6efe4;
+            --muted: #c8b8a2;
+            --accent: #d4af37;
+            --border: rgba(212,175,55,0.22);
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: Georgia, "Times New Roman", serif;
+            background: linear-gradient(180deg, #16110d, var(--bg));
+            color: var(--text);
+        }
+        .wrap {
+            width: min(920px, calc(100vw - 32px));
+            margin: 0 auto;
+            padding: 28px 0 56px;
+        }
+        .panel {
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            background: var(--panel);
+            padding: 22px;
+            margin-bottom: 16px;
+        }
+        .kicker {
+            font-size: 12px;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--muted);
+            font-weight: 700;
+        }
+        h1 {
+            margin: 10px 0 12px;
+            font-size: clamp(28px, 4.8vw, 46px);
+            line-height: 1.08;
+        }
+        h2 {
+            margin: 0 0 10px;
+            font-size: 22px;
+        }
+        p, li {
+            color: var(--muted);
+            line-height: 1.75;
+            font-size: 15px;
+        }
+        code {
+            background: rgba(255,255,255,0.06);
+            padding: 2px 6px;
+            border-radius: 8px;
+        }
+        a {
+            color: var(--accent);
+            text-decoration: none;
+        }
+        a:hover {
+            text-decoration: underline;
+        }
+        .links {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .note {
+            background: var(--panel-2);
+        }
+    </style>
+</head>
+<body>
+    <div class="wrap">
+        <div class="panel">
+            <div class="kicker">ATChess Live</div>
+            <h1>Stockfish GPL Notice</h1>
+            <p>This site distributes a bundled Stockfish-based engine runtime to the browser for gameplay and analysis. The bundled engine file <code>stockfish-18-lite-single.js</code> states <code>License: GPLv3</code>.</p>
+            <p><a href="/">Back to ATChess Live</a> · <a href="/third-party-notices.html">View all third-party notices</a></p>
+        </div>
+
+        <div class="panel">
+            <h2>Engine Files Served By This Site</h2>
+            <ul>
+                <li><code>/stockfish-18-lite-single.js</code></li>
+                <li><code>/stockfish-18-lite-single.wasm</code></li>
+            </ul>
+        </div>
+
+        <div class="panel">
+            <h2>Source Pointers</h2>
+            <p>The Stockfish project states that when Stockfish is distributed, the distributor must include the full source code or a pointer to the source code needed to generate the exact binary being distributed.</p>
+            <div class="links">
+                <a href="https://github.com/nmrugg/stockfish.js" target="_blank" rel="noopener noreferrer">stockfish.js source repository</a>
+                <a href="https://github.com/official-stockfish/Stockfish" target="_blank" rel="noopener noreferrer">official Stockfish source repository</a>
+                <a href="https://stockfishchess.org/about/" target="_blank" rel="noopener noreferrer">Stockfish GPL explanation</a>
+                <a href="https://www.gnu.org/licenses/gpl-3.0.txt" target="_blank" rel="noopener noreferrer">GNU GPL v3 license text</a>
+            </div>
+        </div>
+
+        <div class="panel note">
+            <h2>Note</h2>
+            <p>This page is an attribution and source-pointer notice, not legal advice. If the bundled engine is changed in the future, the corresponding modified source should also be published under GPLv3.</p>
+        </div>
+    </div>
+</body>
+</html>
