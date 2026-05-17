@@ -2811,6 +2811,17 @@ function showDeveloperJoinAnimation(profile) {
 function maybeShowDeveloperJoinAnimation(state) {
     const developerProfiles = getDeveloperProfilesInRoom(state);
     if (!developerProfiles.length) return;
+    const currentUserId = currentAuthProfile?.id || null;
+    const currentEmail = String(currentAuthProfile?.email || '').toLowerCase();
+    const currentUserIsAnnouncedDeveloper = developerProfiles.some((profile) => {
+        const profileUserId = profile.userId || null;
+        const profileEmail = String(profile.email || '').toLowerCase();
+        return (
+            (currentUserId && profileUserId && currentUserId === profileUserId) ||
+            (currentEmail && profileEmail && currentEmail === profileEmail)
+        );
+    });
+    if (currentUserIsAnnouncedDeveloper) return;
     const developerKey = developerProfiles
         .map((profile) => profile.userId || profile.email || profile.displayName || 'developer')
         .sort()
