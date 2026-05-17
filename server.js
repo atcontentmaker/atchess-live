@@ -28,7 +28,7 @@ const DEVELOPER_EMAILS = new Set(
 );
 const rateLimitBuckets = new Map();
 const rooms = new Map();
-const bannedIdentities = new Set();
+const globalBans = new Map();
 
 const allowedOrigins = new Set(
     String(process.env.ALLOWED_ORIGINS || '')
@@ -293,6 +293,7 @@ function createRoom(roomId, timeControlMs = 300000) {
             black: null
         },
         host: null,
+        roomBans: new Set(),
         sockets: new Set(),
         timeControlMs,
         clocks: {
@@ -310,23 +311,54 @@ function createRoom(roomId, timeControlMs = 300000) {
     return room;
 }
 
-function getProfileIdentityKeys(profile, deviceId = null) {
+function getAccountIdentityKeys(profile) {
     const keys = [];
     const userId = String(profile?.userId || '').trim();
     const email = String(profile?.email || '').trim().toLowerCase();
-    const normalizedDeviceId = String(deviceId || '').trim();
     if (userId) keys.push(`user:${userId}`);
     if (email) keys.push(`email:${email}`);
+    return keys;
+}
+
+function getGuestIdentityKeys(deviceId = null) {
+    const keys = [];
+    const normalizedDeviceId = String(deviceId || '').trim();
     if (normalizedDeviceId) keys.push(`device:${normalizedDeviceId}`);
     return keys;
 }
 
-function isIdentityBanned(profile, deviceId = null) {
-    return getProfileIdentityKeys(profile, deviceId).some((key) => bannedIdentities.has(key));
+function getPlayableIdentityKeys(profile, deviceId = null) {
+    const accountKeys = getAccountIdentityKeys(profile);
+    return accountKeys.length ? accountKeys : getGuestIdentityKeys(deviceId);
 }
 
-function banIdentity(profile, deviceId = null) {
-    getProfileIdentityKeys(profile, deviceId).forEach((key) => bannedIdentities.add(key));
+function getGlobalBan(profile, deviceId = null) {
+    const key = getPlayableIdentityKeys(profile, deviceId).find((identityKey) => globalBans.has(identityKey));
+    return key ? globalBans.get(key) : null;
+}
+
+function addGlobalBan(profile, deviceId = null, reason = '') {
+    getPlayableIdentityKeys(profile, deviceId).forEach((key) => {
+        globalBans.set(key, reason || 'You are banned from ATChess Live.');
+    });
+}
+
+function addRoomBan(room, profile, deviceId = null) {
+    getPlayableIdentityKeys(profile, deviceId).forEach((key) => room.roomBans.add(key));
+}
+
+function isRoomBanned(room, profile, deviceId = null) {
+    return getPlayableIdentityKeys(profile, deviceId).some((key) => room.roomBans.has(key));
+}
+
+function normalizeBanReason(value) {
+    const words = String(value || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .split(' ')
+        .filter(Boolean)
+        .slice(0, 200);
+    return words.join(' ') || 'You are banned from ATChess Live.';
 }
 
 function setRoomHost(room, seat) {
@@ -625,8 +657,9 @@ io.on('connection', (socket) => {
         const roomId = generateUniqueRoomId();
         const initialTime = normalizeTimeControlMs(timeControlMs);
         const sanitizedProfile = sanitizeProfile(profile);
-        if (isIdentityBanned(sanitizedProfile, deviceId)) {
-            callback({ ok: false, error: 'You are banned from creating ATChess rooms.' });
+        const globalBan = getGlobalBan(sanitizedProfile, deviceId);
+        if (globalBan) {
+            callback({ ok: false, error: globalBan, globalBan: true });
             return;
         }
         const room = createRoom(roomId, initialTime);
@@ -663,8 +696,13 @@ io.on('connection', (socket) => {
             callback({ ok: false, error: 'Room not found.' });
             return;
         }
-        if (isIdentityBanned(sanitizedProfile, deviceId)) {
-            callback({ ok: false, error: 'You are banned from joining ATChess rooms.' });
+        const globalBan = getGlobalBan(sanitizedProfile, deviceId);
+        if (globalBan) {
+            callback({ ok: false, error: globalBan, globalBan: true });
+            return;
+        }
+        if (isRoomBanned(room, sanitizedProfile, deviceId)) {
+            callback({ ok: false, error: 'You are banned from this room.' });
             return;
         }
 
@@ -833,12 +871,13 @@ io.on('connection', (socket) => {
         callback({ ok: true, state: serializeRoom(room) });
     });
 
-    socket.on('room_moderation', ({ roomId, action, targetColor } = {}, callback = () => {}) => {
+    socket.on('room_moderation', ({ roomId, action, targetColor, reason } = {}, callback = () => {}) => {
         if (!allowSocketAction(socket, 'room_moderation', 20, 60_000, callback)) return;
 
         const normalizedId = String(roomId || '').trim().toUpperCase();
         const normalizedTargetColor = targetColor === 'white' ? 'white' : targetColor === 'black' ? 'black' : '';
-        const normalizedAction = action === 'ban' ? 'ban' : action === 'kick' ? 'kick' : '';
+        const normalizedAction = ['kick', 'room_ban', 'global_ban'].includes(action) ? action : '';
+        const banReason = normalizeBanReason(reason);
         const room = rooms.get(normalizedId);
 
         if (!room) {
@@ -868,29 +907,46 @@ io.on('connection', (socket) => {
             return;
         }
 
-        if (normalizedAction === 'kick') {
+        if (normalizedAction === 'kick' || normalizedAction === 'room_ban') {
             if (!requesterIsHost && !requesterIsDeveloper) {
-                callback({ ok: false, error: 'Only the room creator can kick players before the game starts.' });
+                callback({ ok: false, error: 'Only the room creator can moderate this room before the game starts.' });
                 return;
             }
             if (!requesterIsDeveloper && room.game.history().length > 0) {
-                callback({ ok: false, error: 'Kicking locks after the first move.' });
+                callback({ ok: false, error: 'Room moderation locks after the first move.' });
                 return;
             }
 
-            removeSeatFromRoom(room, normalizedTargetColor, 'You were kicked from the room.');
+            if (normalizedAction === 'room_ban') {
+                addRoomBan(room, targetSeat.profile, targetSeat.deviceId);
+            }
+
+            removeSeatFromRoom(
+                room,
+                normalizedTargetColor,
+                normalizedAction === 'room_ban' ? 'You were banned from this room.' : 'You were kicked from the room.'
+            );
             emitRoomState(normalizedId);
             callback({ ok: true, state: serializeRoom(room) });
             return;
         }
 
         if (!requesterIsDeveloper) {
-            callback({ ok: false, error: 'Only developers can ban users.' });
+            callback({ ok: false, error: 'Only developers can permanently ban users.' });
             return;
         }
 
-        banIdentity(targetSeat.profile, targetSeat.deviceId);
-        removeSeatFromRoom(room, normalizedTargetColor, 'You were banned by a developer.');
+        addGlobalBan(targetSeat.profile, targetSeat.deviceId, banReason);
+        removeSeatFromRoom(room, normalizedTargetColor, banReason);
+        if (targetSeat.socketId) {
+            const targetSocket = io.sockets.sockets.get(targetSeat.socketId);
+            targetSocket?.emit('global_ban_applied', {
+                reason: banReason,
+                email: targetSeat.profile?.email || null,
+                userId: targetSeat.profile?.userId || null,
+                guest: !targetSeat.profile?.userId && !targetSeat.profile?.email
+            });
+        }
         emitRoomState(normalizedId);
         callback({ ok: true, state: serializeRoom(room) });
     });

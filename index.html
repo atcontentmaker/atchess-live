@@ -1868,8 +1868,10 @@
                 <div class="control-buttons moderation-controls">
                     <button class="btn-secondary" id="kick-white-btn" onclick="moderateRoomSeat('kick', 'white')" disabled>Kick White</button>
                     <button class="btn-secondary" id="kick-black-btn" onclick="moderateRoomSeat('kick', 'black')" disabled>Kick Black</button>
-                    <button class="btn-secondary" id="ban-white-btn" onclick="moderateRoomSeat('ban', 'white')" disabled>Ban White</button>
-                    <button class="btn-secondary" id="ban-black-btn" onclick="moderateRoomSeat('ban', 'black')" disabled>Ban Black</button>
+                    <button class="btn-secondary" id="room-ban-white-btn" onclick="moderateRoomSeat('room_ban', 'white')" disabled>Room Ban White</button>
+                    <button class="btn-secondary" id="room-ban-black-btn" onclick="moderateRoomSeat('room_ban', 'black')" disabled>Room Ban Black</button>
+                    <button class="btn-secondary" id="global-ban-white-btn" onclick="moderateRoomSeat('global_ban', 'white')" disabled>Game Ban White</button>
+                    <button class="btn-secondary" id="global-ban-black-btn" onclick="moderateRoomSeat('global_ban', 'black')" disabled>Game Ban Black</button>
                 </div>
             </div>
 
@@ -2130,6 +2132,7 @@ const THEME_IDS = ['modern-green', 'classic-brown', 'lilac-pink', 'electric-blue
 const APP_STATE_STORAGE_KEY = 'atchess-app-state';
 const DEVICE_ID_STORAGE_KEY = 'atchess-device-id';
 const ROOM_CREDENTIALS_STORAGE_KEY = 'atchess-room-credentials';
+const GAME_BAN_STORAGE_KEY = 'atchess-game-ban';
 const ONLINE_RECONNECT_GRACE_SECONDS = 25;
 
 function createPersistentId() {
@@ -2204,6 +2207,46 @@ function safeLocalStorageGet(key) {
     try { return localStorage.getItem(key); } catch (e) { return null; }
 }
 
+function readStoredGameBan() {
+    try {
+        const parsed = JSON.parse(safeLocalStorageGet(GAME_BAN_STORAGE_KEY) || 'null');
+        return parsed && typeof parsed === 'object' ? parsed : null;
+    } catch (e) {
+        return null;
+    }
+}
+
+function storeGameBan(details = {}) {
+    const ban = {
+        reason: String(details.reason || 'You are banned from ATChess Live.').slice(0, 1600),
+        userId: details.userId || currentAuthProfile?.id || null,
+        email: (details.email || currentAuthProfile?.email || '').toLowerCase() || null,
+        guestDeviceId: details.guest ? getPersistentDeviceId() : null
+    };
+    safeLocalStorageSet(GAME_BAN_STORAGE_KEY, JSON.stringify(ban));
+    currentGameBan = getActiveStoredGameBan();
+    applyGameBanUI();
+}
+
+function getActiveStoredGameBan() {
+    const ban = readStoredGameBan();
+    if (!ban) return null;
+    if (currentAuthProfile) {
+        const currentEmail = String(currentAuthProfile.email || '').toLowerCase();
+        if ((ban.userId && ban.userId === currentAuthProfile.id) || (ban.email && ban.email === currentEmail)) {
+            return ban;
+        }
+        return null;
+    }
+    return ban.guestDeviceId && ban.guestDeviceId === getPersistentDeviceId() ? ban : null;
+}
+
+function applyGameBanUI() {
+    currentGameBan = getActiveStoredGameBan();
+    if (!currentGameBan) return;
+    setOnlineStatus(`Banned: ${currentGameBan.reason}`, false);
+}
+
 function applyTheme(themeId, persist = true) {
     const resolvedTheme = THEME_IDS.includes(themeId) ? themeId : 'modern-green';
     document.documentElement.setAttribute('data-theme', resolvedTheme);
@@ -2237,7 +2280,8 @@ function updateModerationControls() {
     const isHost = isOnlineRoom && onlinePlayerColor === state.hostColor;
     const moderationLocked = !!state?.moderationLocked;
     const canKick = isOnlineRoom && ((isHost && !moderationLocked) || isDeveloper);
-    const canBan = isOnlineRoom && isDeveloper;
+    const canRoomBan = isOnlineRoom && ((isHost && !moderationLocked) || isDeveloper);
+    const canGlobalBan = isOnlineRoom && isDeveloper;
     const whiteOccupied = !!state?.players?.white?.occupied;
     const blackOccupied = !!state?.players?.black?.occupied;
     const canTargetWhite = onlinePlayerColor !== 'white';
@@ -2245,8 +2289,10 @@ function updateModerationControls() {
 
     if (moderationButtons.kickWhite) moderationButtons.kickWhite.disabled = !(canKick && whiteOccupied && canTargetWhite);
     if (moderationButtons.kickBlack) moderationButtons.kickBlack.disabled = !(canKick && blackOccupied && canTargetBlack);
-    if (moderationButtons.banWhite) moderationButtons.banWhite.disabled = !(canBan && whiteOccupied && canTargetWhite);
-    if (moderationButtons.banBlack) moderationButtons.banBlack.disabled = !(canBan && blackOccupied && canTargetBlack);
+    if (moderationButtons.roomBanWhite) moderationButtons.roomBanWhite.disabled = !(canRoomBan && whiteOccupied && canTargetWhite);
+    if (moderationButtons.roomBanBlack) moderationButtons.roomBanBlack.disabled = !(canRoomBan && blackOccupied && canTargetBlack);
+    if (moderationButtons.globalBanWhite) moderationButtons.globalBanWhite.disabled = !(canGlobalBan && whiteOccupied && canTargetWhite);
+    if (moderationButtons.globalBanBlack) moderationButtons.globalBanBlack.disabled = !(canGlobalBan && blackOccupied && canTargetBlack);
 }
 
 function openInfoModal() {
@@ -2315,6 +2361,7 @@ function updateModeUI() {
 }
 
 function canControlCurrentTurn() {
+    if (currentGameBan) return false;
     if (currentMode === 'online') {
         return onlinePlayerColor !== 'spectator' && onlinePlayerColor === (game.turn() === 'w' ? 'white' : 'black');
     }
@@ -2433,6 +2480,9 @@ function ensureSocket() {
         setOnlineStatus(reason || 'You were removed from the room.', false);
         updateModeUI();
     });
+    socket.on('global_ban_applied', ({ reason, email, userId, guest } = {}) => {
+        storeGameBan({ reason, email, userId, guest });
+    });
     socket.on('disconnect', () => {
         if (currentMode === 'online') setOnlineStatus('Disconnected. Trying to reconnect your seat...', false);
     });
@@ -2546,6 +2596,11 @@ function prepareOnlineMode() {
 }
 
 function createOnlineRoom() {
+    currentGameBan = getActiveStoredGameBan();
+    if (currentGameBan) {
+        applyGameBanUI();
+        return;
+    }
     if (currentMode !== 'online') prepareOnlineMode();
     const socketClient = ensureSocket();
     if (!socketClient) {
@@ -2559,6 +2614,7 @@ function createOnlineRoom() {
         profile: getCurrentPlayerProfileForRoom()
     }, (response) => {
         if (!response?.ok) {
+            if (response?.globalBan) storeGameBan({ reason: response.error, guest: !currentAuthProfile });
             setOnlineStatus(response?.error || 'Could not create room.');
             return;
         }
@@ -2574,6 +2630,11 @@ function createOnlineRoom() {
 }
 
 function joinOnlineRoom() {
+    currentGameBan = getActiveStoredGameBan();
+    if (currentGameBan) {
+        applyGameBanUI();
+        return;
+    }
     if (currentMode !== 'online') prepareOnlineMode();
     const socketClient = ensureSocket();
     const roomId = (roomCodeInput?.value || '').trim().toUpperCase();
@@ -2586,6 +2647,7 @@ function joinOnlineRoom() {
     joinPayload.profile = getCurrentPlayerProfileForRoom();
     socketClient.emit('join_room', joinPayload, (response) => {
         if (!response?.ok) {
+            if (response?.globalBan) storeGameBan({ reason: response.error, guest: !currentAuthProfile });
             setOnlineStatus(response?.error || 'Could not join room.');
             return;
         }
@@ -2692,8 +2754,10 @@ const devOptionsOutput = document.getElementById('dev-options-output');
 const moderationButtons = {
     kickWhite: document.getElementById('kick-white-btn'),
     kickBlack: document.getElementById('kick-black-btn'),
-    banWhite: document.getElementById('ban-white-btn'),
-    banBlack: document.getElementById('ban-black-btn')
+    roomBanWhite: document.getElementById('room-ban-white-btn'),
+    roomBanBlack: document.getElementById('room-ban-black-btn'),
+    globalBanWhite: document.getElementById('global-ban-white-btn'),
+    globalBanBlack: document.getElementById('global-ban-black-btn')
 };
 const game = new Chess();
 
@@ -2723,6 +2787,7 @@ let lastAppliedOnlinePGN = '';
 let lastOutcomeAnimation = null;
 let humanResignedThisGame = false;
 let currentAuthProfile = null;
+let currentGameBan = null;
 let lastRecordedMatchKey = null;
 let lastDeveloperJoinAnimationKey = '';
 
@@ -2811,12 +2876,28 @@ window.moderateRoomSeat = function (action, targetColor) {
         setOnlineStatus('Join an online room first.');
         return;
     }
-    socket.emit('room_moderation', { roomId: onlineRoomId, action, targetColor }, (response) => {
+    let reason = '';
+    if (action === 'global_ban') {
+        reason = window.prompt('Explain the permanent game ban. Max 200 words.');
+        if (reason === null) return;
+        reason = reason.replace(/\s+/g, ' ').trim();
+        if (!reason) {
+            setOnlineStatus('Permanent bans need a reason.', false);
+            return;
+        }
+    }
+    socket.emit('room_moderation', { roomId: onlineRoomId, action, targetColor, reason }, (response) => {
         if (!response?.ok) {
             setOnlineStatus(response?.error || 'Moderation action failed.', false);
             return;
         }
-        setOnlineStatus(`${targetColor === 'white' ? 'White' : 'Black'} was ${action === 'ban' ? 'banned' : 'kicked'}.`, true);
+        const label = targetColor === 'white' ? 'White' : 'Black';
+        const actionLabel = action === 'global_ban'
+            ? 'permanently banned from the game'
+            : action === 'room_ban'
+                ? 'banned from this room'
+                : 'kicked';
+        setOnlineStatus(`${label} was ${actionLabel}.`, true);
         if (response.state) applyOnlineRoomState(response.state);
     });
 };
@@ -2947,9 +3028,11 @@ function maybeRecordMatchHistory() {
 
 window.addEventListener('atchess-auth-changed', (event) => {
     currentAuthProfile = event.detail || null;
+    currentGameBan = getActiveStoredGameBan();
     refreshDeveloperOptions();
     updatePlayerLabels();
     updateModerationControls();
+    applyGameBanUI();
 });
 
 function isTimerEnabled() {
