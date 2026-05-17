@@ -1865,6 +1865,12 @@
                     <button class="btn-secondary" id="leave-room-btn" onclick="leaveOnlineRoom()">Leave Room</button>
                 </div>
                 <div class="online-status" id="online-status">Engine mode active.</div>
+                <div class="control-buttons moderation-controls">
+                    <button class="btn-secondary" id="kick-white-btn" onclick="moderateRoomSeat('kick', 'white')" disabled>Kick White</button>
+                    <button class="btn-secondary" id="kick-black-btn" onclick="moderateRoomSeat('kick', 'black')" disabled>Kick Black</button>
+                    <button class="btn-secondary" id="ban-white-btn" onclick="moderateRoomSeat('ban', 'white')" disabled>Ban White</button>
+                    <button class="btn-secondary" id="ban-black-btn" onclick="moderateRoomSeat('ban', 'black')" disabled>Ban Black</button>
+                </div>
             </div>
 
             <div class="auth-panel">
@@ -2224,6 +2230,25 @@ function setOnlineStatus(message, isConnected = false) {
     }
 }
 
+function updateModerationControls() {
+    const state = onlineRoomState;
+    const isOnlineRoom = currentMode === 'online' && !!onlineRoomId && !!state;
+    const isDeveloper = !!currentAuthProfile?.isDeveloper;
+    const isHost = isOnlineRoom && onlinePlayerColor === state.hostColor;
+    const moderationLocked = !!state?.moderationLocked;
+    const canKick = isOnlineRoom && ((isHost && !moderationLocked) || isDeveloper);
+    const canBan = isOnlineRoom && isDeveloper;
+    const whiteOccupied = !!state?.players?.white?.occupied;
+    const blackOccupied = !!state?.players?.black?.occupied;
+    const canTargetWhite = onlinePlayerColor !== 'white';
+    const canTargetBlack = onlinePlayerColor !== 'black';
+
+    if (moderationButtons.kickWhite) moderationButtons.kickWhite.disabled = !(canKick && whiteOccupied && canTargetWhite);
+    if (moderationButtons.kickBlack) moderationButtons.kickBlack.disabled = !(canKick && blackOccupied && canTargetBlack);
+    if (moderationButtons.banWhite) moderationButtons.banWhite.disabled = !(canBan && whiteOccupied && canTargetWhite);
+    if (moderationButtons.banBlack) moderationButtons.banBlack.disabled = !(canBan && blackOccupied && canTargetBlack);
+}
+
 function openInfoModal() {
     if (!infoModal) return;
     infoModal.classList.add('open');
@@ -2286,6 +2311,7 @@ function updateModeUI() {
     if (leaveRoomBtn) leaveRoomBtn.disabled = !onlineRoomId;
     if (roomCodeInput) roomCodeInput.disabled = !isOnline;
     updatePlayerLabels();
+    updateModerationControls();
 }
 
 function canControlCurrentTurn() {
@@ -2394,6 +2420,18 @@ function ensureSocket() {
     socket.on('room_state', (state) => {
         if (!onlineRoomId || state.id !== onlineRoomId) return;
         applyOnlineRoomState(state);
+    });
+    socket.on('room_removed', ({ roomId, reason } = {}) => {
+        if (roomId && onlineRoomId && roomId !== onlineRoomId) return;
+        onlineRoomId = null;
+        onlinePlayerColor = 'spectator';
+        onlineRoomState = null;
+        reconnectAttemptInFlight = false;
+        lastAppliedOnlinePGN = '';
+        lastDeveloperJoinAnimationKey = '';
+        if (roomCodeInput) roomCodeInput.value = '';
+        setOnlineStatus(reason || 'You were removed from the room.', false);
+        updateModeUI();
     });
     socket.on('disconnect', () => {
         if (currentMode === 'online') setOnlineStatus('Disconnected. Trying to reconnect your seat...', false);
@@ -2651,6 +2689,12 @@ const whiteDevRankElement = document.getElementById('white-dev-rank');
 const blackDevRankElement = document.getElementById('black-dev-rank');
 const devOptionsPanel = document.getElementById('dev-options-panel');
 const devOptionsOutput = document.getElementById('dev-options-output');
+const moderationButtons = {
+    kickWhite: document.getElementById('kick-white-btn'),
+    kickBlack: document.getElementById('kick-black-btn'),
+    banWhite: document.getElementById('ban-white-btn'),
+    banBlack: document.getElementById('ban-black-btn')
+};
 const game = new Chess();
 
 const pieceIcons = {
@@ -2760,6 +2804,21 @@ window.copyDeveloperSnapshot = async function () {
 window.toggleDeveloperDetails = function () {
     if (!currentAuthProfile?.isDeveloper || !devOptionsOutput) return;
     devOptionsOutput.textContent = JSON.stringify(getDeveloperSnapshot());
+};
+
+window.moderateRoomSeat = function (action, targetColor) {
+    if (!socket || !onlineRoomId) {
+        setOnlineStatus('Join an online room first.');
+        return;
+    }
+    socket.emit('room_moderation', { roomId: onlineRoomId, action, targetColor }, (response) => {
+        if (!response?.ok) {
+            setOnlineStatus(response?.error || 'Moderation action failed.', false);
+            return;
+        }
+        setOnlineStatus(`${targetColor === 'white' ? 'White' : 'Black'} was ${action === 'ban' ? 'banned' : 'kicked'}.`, true);
+        if (response.state) applyOnlineRoomState(response.state);
+    });
 };
 
 function getDeveloperProfilesInRoom(state) {
@@ -2890,6 +2949,7 @@ window.addEventListener('atchess-auth-changed', (event) => {
     currentAuthProfile = event.detail || null;
     refreshDeveloperOptions();
     updatePlayerLabels();
+    updateModerationControls();
 });
 
 function isTimerEnabled() {
