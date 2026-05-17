@@ -20,6 +20,12 @@ const DEFAULT_TIME_CONTROL_MS = 300_000;
 const MAX_TIME_CONTROL_MS = 86_400_000;
 const ROOM_CODE_LENGTH = 8;
 const ROOM_ALPHABET = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+const DEVELOPER_EMAILS = new Set(
+    String(process.env.DEVELOPER_EMAILS || 'xxx@xx.com,yyyy@yy.com')
+        .split(',')
+        .map((entry) => entry.trim().toLowerCase())
+        .filter(Boolean)
+);
 const rateLimitBuckets = new Map();
 const rooms = new Map();
 
@@ -245,7 +251,8 @@ function sanitizeProfile(profile) {
         displayName: displayName || 'Guest',
         avatarUrl: avatarUrl || null,
         email: email || null,
-        userId: userId || null
+        userId: userId || null,
+        isDeveloper: DEVELOPER_EMAILS.has(email.toLowerCase())
     };
 }
 

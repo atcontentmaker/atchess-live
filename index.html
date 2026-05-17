@@ -254,6 +254,12 @@
         .player-details {
             min-width: 0;
         }
+        .player-name-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
         .player-right {
             display: flex;
             align-items: center;
@@ -274,6 +280,31 @@
             font-weight: 600;
             color: var(--text-1);
             white-space: nowrap;
+        }
+        .developer-rank {
+            display: inline-flex;
+            align-items: center;
+            flex-shrink: 0;
+            margin-left: 6px;
+            font-size: 10px;
+            font-family: var(--font-mono);
+            font-weight: 800;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            background: linear-gradient(90deg, #ff4d6d, #ffd166, #42f58d, #4cc9f0, #b967ff, #ff4d6d);
+            background-size: 300% 100%;
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+            animation: developer-rainbow 2.8s linear infinite;
+            filter: drop-shadow(0 0 8px rgba(255,255,255,0.24));
+        }
+        .developer-rank[hidden] {
+            display: none;
+        }
+        @keyframes developer-rainbow {
+            0% { background-position: 0% 50%; }
+            100% { background-position: 300% 50%; }
         }
         .player-rating {
             font-size: 11px;
@@ -773,6 +804,34 @@
             border-color: var(--border);
             background: rgba(255,255,255,0.03);
             color: var(--text-2);
+        }
+        .auth-badge.developer {
+            border-color: rgba(255,255,255,0.35);
+            background: rgba(255,255,255,0.06);
+        }
+        .dev-options-panel {
+            display: none;
+            border: 1px solid var(--border);
+            background: rgba(255,255,255,0.03);
+            border-radius: var(--radius-sm);
+            padding: 10px;
+            gap: 8px;
+            flex-direction: column;
+        }
+        .dev-options-panel.open {
+            display: flex;
+        }
+        .dev-options-title {
+            color: var(--accent);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+        }
+        .dev-options-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
         }
         .auth-summary {
             display: flex;
@@ -1675,7 +1734,7 @@
             <div class="player-info">
                     <div class="player-avatar black-av" id="black-player-avatar">&#9823;</div>
                 <div class="player-details">
-                    <div class="player-name" id="black-player-name">Stockfish</div>
+                    <div class="player-name-row"><span class="player-name" id="black-player-name">Stockfish</span><span class="developer-rank" id="black-dev-rank" hidden>[dev] &#128081;</span></div>
                     <div class="player-rating" id="black-player-rating">Engine</div>
                 </div>
             </div>
@@ -1695,7 +1754,7 @@
             <div class="player-info">
                     <div class="player-avatar white-av" id="white-player-avatar">&#9817;</div>
                 <div class="player-details">
-                    <div class="player-name" id="white-player-name">You</div>
+                    <div class="player-name-row"><span class="player-name" id="white-player-name">You</span><span class="developer-rank" id="white-dev-rank" hidden>[dev] &#128081;</span></div>
                     <div class="player-rating" id="white-player-rating">Human</div>
                 </div>
             </div>
@@ -1766,6 +1825,15 @@
                     <button class="auth-btn-primary" id="auth-open-btn" onclick="openAuthModal()">Create / Sign In</button>
                     <button class="auth-btn-secondary" id="auth-signout-btn" onclick="signOutAccount()" disabled>Sign Out</button>
                 </div>
+            </div>
+
+            <div class="dev-options-panel" id="dev-options-panel">
+                <div class="dev-options-title">Developer</div>
+                <div class="dev-options-grid">
+                    <button class="btn-secondary" type="button" onclick="copyDeveloperSnapshot()">Copy Debug</button>
+                    <button class="btn-secondary" type="button" onclick="toggleDeveloperDetails()">Toggle State</button>
+                </div>
+                <div class="online-status" id="dev-options-output">Developer tools unlocked.</div>
             </div>
 
             <div class="control-grid">
@@ -2125,6 +2193,8 @@ function updatePlayerLabels() {
         };
         if (whitePlayerNameElement) whitePlayerNameElement.textContent = whiteName;
         if (blackPlayerNameElement) blackPlayerNameElement.textContent = blackName;
+        setDeveloperRank(whiteDevRankElement, onlinePlayerColor === 'white' ? currentAuthProfile?.isDeveloper : whiteSeat.profile?.isDeveloper);
+        setDeveloperRank(blackDevRankElement, onlinePlayerColor === 'black' ? currentAuthProfile?.isDeveloper : blackSeat.profile?.isDeveloper);
         if (whitePlayerRatingElement) whitePlayerRatingElement.textContent = describeSeat('White', whiteSeat, onlinePlayerColor === 'white');
         if (blackPlayerRatingElement) blackPlayerRatingElement.textContent = describeSeat('Black', blackSeat, onlinePlayerColor === 'black');
         applyPlayerAvatar(whitePlayerAvatarElement, onlinePlayerColor === 'white' ? currentAuthProfile?.avatarUrl : whiteSeat.profile?.avatarUrl, getDefaultAvatarGlyph('white'));
@@ -2133,6 +2203,8 @@ function updatePlayerLabels() {
     }
 
     if (whitePlayerNameElement) whitePlayerNameElement.textContent = getProfileDisplayName(currentAuthProfile) || 'You';
+    setDeveloperRank(whiteDevRankElement, currentAuthProfile?.isDeveloper);
+    setDeveloperRank(blackDevRankElement, false);
     if (whitePlayerRatingElement) whitePlayerRatingElement.textContent = currentAuthProfile ? 'Signed In' : 'Human';
     if (blackPlayerNameElement) blackPlayerNameElement.textContent = 'Stockfish';
     if (blackPlayerRatingElement) blackPlayerRatingElement.textContent = 'Engine';
@@ -2510,6 +2582,10 @@ const whitePlayerNameElement = document.getElementById('white-player-name');
 const whitePlayerRatingElement = document.getElementById('white-player-rating');
 const blackPlayerNameElement = document.getElementById('black-player-name');
 const blackPlayerRatingElement = document.getElementById('black-player-rating');
+const whiteDevRankElement = document.getElementById('white-dev-rank');
+const blackDevRankElement = document.getElementById('black-dev-rank');
+const devOptionsPanel = document.getElementById('dev-options-panel');
+const devOptionsOutput = document.getElementById('dev-options-output');
 const game = new Chess();
 
 const pieceIcons = {
@@ -2567,9 +2643,58 @@ function getCurrentPlayerProfileForRoom() {
         userId: currentAuthProfile?.id || null,
         displayName: getProfileDisplayName(currentAuthProfile) || 'Guest',
         avatarUrl: currentAuthProfile?.avatarUrl || null,
-        email: currentAuthProfile?.email || null
+        email: currentAuthProfile?.email || null,
+        isDeveloper: !!currentAuthProfile?.isDeveloper
     };
 }
+
+function setDeveloperRank(element, isDeveloper) {
+    if (!element) return;
+    element.hidden = !isDeveloper;
+}
+
+function refreshDeveloperOptions() {
+    const isDeveloper = !!currentAuthProfile?.isDeveloper;
+    if (devOptionsPanel) devOptionsPanel.classList.toggle('open', isDeveloper);
+    if (!isDeveloper && devOptionsOutput) devOptionsOutput.textContent = 'Developer tools unlocked.';
+}
+
+function getDeveloperSnapshot() {
+    return {
+        mode: currentMode,
+        roomId: onlineRoomId,
+        playerColor: onlinePlayerColor,
+        fen: game.fen(),
+        pgn: game.pgn(),
+        turn: game.turn(),
+        history: game.history(),
+        clocks,
+        resigned,
+        timeoutWinner,
+        auth: currentAuthProfile ? {
+            id: currentAuthProfile.id,
+            email: currentAuthProfile.email,
+            displayName: currentAuthProfile.displayName,
+            isDeveloper: !!currentAuthProfile.isDeveloper
+        } : null
+    };
+}
+
+window.copyDeveloperSnapshot = async function () {
+    if (!currentAuthProfile?.isDeveloper) return;
+    const snapshot = JSON.stringify(getDeveloperSnapshot(), null, 2);
+    try {
+        await navigator.clipboard.writeText(snapshot);
+        if (devOptionsOutput) devOptionsOutput.textContent = 'Debug snapshot copied.';
+    } catch (_error) {
+        if (devOptionsOutput) devOptionsOutput.textContent = snapshot;
+    }
+};
+
+window.toggleDeveloperDetails = function () {
+    if (!currentAuthProfile?.isDeveloper || !devOptionsOutput) return;
+    devOptionsOutput.textContent = JSON.stringify(getDeveloperSnapshot());
+};
 
 function computeMatchRecordKey(mode, result, reason) {
     return [mode, result, reason, game.pgn(), onlineRoomId || 'local'].join('|');
@@ -2627,6 +2752,7 @@ function maybeRecordMatchHistory() {
 
 window.addEventListener('atchess-auth-changed', (event) => {
     currentAuthProfile = event.detail || null;
+    refreshDeveloperOptions();
     updatePlayerLabels();
 });
 
@@ -3372,4 +3498,3 @@ window.addEventListener('load', function () {
 </script>
 </body>
 </html>
-

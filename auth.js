@@ -9,6 +9,11 @@
         config.supabaseAnonKey &&
         !config.supabaseUrl.includes('YOUR_SUPABASE_URL') &&
         !config.supabaseAnonKey.includes('YOUR_SUPABASE_ANON_KEY');
+    const developerEmails = new Set(
+        (Array.isArray(config.developerEmails) ? config.developerEmails : [])
+            .map((email) => String(email || '').trim().toLowerCase())
+            .filter(Boolean)
+    );
 
     const authModal = document.getElementById('auth-modal');
     const authCard = authModal?.querySelector('.auth-card') || null;
@@ -158,13 +163,19 @@
         return user.user_metadata?.atchess_avatar_url || user.user_metadata?.avatar_url || '';
     }
 
+    function isDeveloperEmail(email) {
+        return developerEmails.has(String(email || '').trim().toLowerCase());
+    }
+
     function buildProfile(user) {
         if (!user) return null;
+        const email = user.email || '';
         return {
             id: user.id,
-            email: user.email || '',
+            email,
             displayName: getProfileDisplayName(user),
-            avatarUrl: getProfileAvatarUrl(user)
+            avatarUrl: getProfileAvatarUrl(user),
+            isDeveloper: isDeveloperEmail(email)
         };
     }
 
@@ -183,6 +194,14 @@
         element.style.backgroundImage = '';
         element.classList.remove('has-photo');
         element.textContent = fallbackGlyph || '';
+    }
+
+    function createDeveloperBadge(isDeveloper) {
+        const badge = document.createElement('span');
+        badge.className = 'developer-rank';
+        badge.hidden = !isDeveloper;
+        badge.textContent = '[dev] \uD83D\uDC51';
+        return badge;
     }
 
     function normalizeUsername(rawValue) {
@@ -395,18 +414,28 @@
         const previewSubtitle = currentUser
             ? `Signed in as ${currentUser.email || describeUser(currentUser)}`
             : 'Guest preview - save this profile after signing in.';
+        const isDeveloper = isDeveloperEmail(currentUser?.email);
 
         setAvatarElement(authPreviewAvatar, previewAvatar, '\u2659');
-        if (authPreviewName) authPreviewName.textContent = previewName;
+        if (authPreviewName) {
+            authPreviewName.textContent = previewName;
+            authPreviewName.appendChild(createDeveloperBadge(isDeveloper));
+        }
         if (authPreviewSubtitle) authPreviewSubtitle.textContent = previewSubtitle;
 
         const sidebarAvatar = currentUser ? getProfileAvatarUrl(currentUser) : '';
         setAvatarElement(authIdentityAvatar, sidebarAvatar, '\u2659');
-        if (authIdentityName) authIdentityName.textContent = currentUser ? describeUser(currentUser) : 'Guest';
+        if (authIdentityName) {
+            authIdentityName.textContent = currentUser ? describeUser(currentUser) : 'Guest';
+            authIdentityName.appendChild(createDeveloperBadge(isDeveloper));
+        }
         if (authIdentityEmail) authIdentityEmail.textContent = currentUser?.email || 'Not signed in';
         if (authSignedInBadge) {
-            authSignedInBadge.textContent = currentUser ? `Signed In · ${describeUser(currentUser)}` : 'Guest Session';
+            authSignedInBadge.textContent = currentUser
+                ? `${isDeveloper ? 'Developer Access' : 'Signed In'} · ${describeUser(currentUser)}`
+                : 'Guest Session';
             authSignedInBadge.classList.toggle('muted', !currentUser);
+            authSignedInBadge.classList.toggle('developer', !!currentUser && isDeveloper);
         }
     }
 
@@ -737,6 +766,7 @@
 
         if (currentUser) {
             authTitleLine.textContent = describeUser(currentUser);
+            authTitleLine.appendChild(createDeveloperBadge(isDeveloperEmail(currentUser.email)));
             authSubtitleLine.textContent = currentUser.email ? `Signed in as ${currentUser.email}` : 'Signed in';
             authOpenBtn.textContent = 'Manage Account';
         } else {
@@ -1269,4 +1299,3 @@
     emitAuthProfile(null);
     initAuth();
 })();
-
