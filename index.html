@@ -306,6 +306,68 @@
             0% { background-position: 0% 50%; }
             100% { background-position: 300% 50%; }
         }
+        .developer-join-burst {
+            position: fixed;
+            inset: 0;
+            z-index: 3000;
+            pointer-events: none;
+            display: grid;
+            place-items: center;
+            background:
+                radial-gradient(circle at 50% 45%, rgba(255,255,255,0.16), transparent 28%),
+                radial-gradient(circle at 30% 30%, rgba(255,77,109,0.16), transparent 24%),
+                radial-gradient(circle at 70% 65%, rgba(76,201,240,0.14), transparent 28%);
+            animation: developer-burst-backdrop 2.8s ease both;
+        }
+        .developer-join-card {
+            min-width: min(420px, calc(100vw - 40px));
+            border: 1px solid rgba(255,255,255,0.22);
+            background: rgba(12, 12, 16, 0.88);
+            box-shadow: 0 24px 80px rgba(0,0,0,0.44), 0 0 46px rgba(255,255,255,0.12);
+            border-radius: var(--radius-sm);
+            padding: 22px 24px;
+            text-align: center;
+            transform-origin: center;
+            animation: developer-burst-card 2.8s cubic-bezier(0.2, 0.9, 0.2, 1) both;
+        }
+        .developer-join-kicker {
+            font-family: var(--font-mono);
+            font-size: 10px;
+            font-weight: 800;
+            letter-spacing: 0.18em;
+            text-transform: uppercase;
+            color: var(--accent);
+            margin-bottom: 8px;
+        }
+        .developer-join-title {
+            font-size: 24px;
+            font-weight: 900;
+            color: var(--text-1);
+        }
+        .developer-join-title .developer-rank {
+            font-size: 16px;
+            margin-left: 8px;
+            vertical-align: middle;
+        }
+        .developer-join-subtitle {
+            margin-top: 8px;
+            color: var(--text-2);
+            font-size: 12px;
+            font-family: var(--font-mono);
+        }
+        @keyframes developer-burst-backdrop {
+            0% { opacity: 0; }
+            12% { opacity: 1; }
+            78% { opacity: 1; }
+            100% { opacity: 0; }
+        }
+        @keyframes developer-burst-card {
+            0% { opacity: 0; transform: translateY(18px) scale(0.92); filter: blur(8px); }
+            14% { opacity: 1; transform: translateY(0) scale(1.03); filter: blur(0); }
+            24% { transform: scale(1); }
+            78% { opacity: 1; transform: scale(1); }
+            100% { opacity: 0; transform: translateY(-12px) scale(0.96); }
+        }
         .player-rating {
             font-size: 11px;
             font-family: var(--font-mono);
@@ -2383,6 +2445,7 @@ function applyOnlineRoomState(state) {
     activeClockSide = state.turn || null;
     if (roomCodeInput) roomCodeInput.value = state.id || '';
     onlineRoomId = state.id || onlineRoomId;
+    maybeShowDeveloperJoinAnimation(state);
     const normalizedStatus = (state.status || '').replace(/\b\w/g, (char) => char.toUpperCase());
     const yourTurn = onlinePlayerColor !== 'spectator' && onlinePlayerColor === state.turn;
     if (!state.resigned && !state.timeoutWinner && !game.in_checkmate() && !game.in_stalemate() && !game.in_draw()) {
@@ -2412,6 +2475,7 @@ function switchToEngineMode(resetBoard = true) {
     onlineRoomState = null;
     reconnectAttemptInFlight = false;
     lastAppliedOnlinePGN = '';
+    lastDeveloperJoinAnimationKey = '';
     resetOutcomeAnimationState();
     setOnlineStatus('Engine mode active.');
     updateModeUI();
@@ -2430,6 +2494,7 @@ function prepareOnlineMode() {
     onlineRoomState = null;
     reconnectAttemptInFlight = false;
     lastAppliedOnlinePGN = '';
+    lastDeveloperJoinAnimationKey = '';
     resetOutcomeAnimationState();
     game.reset();
     lastMove = null;
@@ -2615,6 +2680,7 @@ let lastOutcomeAnimation = null;
 let humanResignedThisGame = false;
 let currentAuthProfile = null;
 let lastRecordedMatchKey = null;
+let lastDeveloperJoinAnimationKey = '';
 
 function getDefaultAvatarGlyph(color) {
     return color === 'white' ? '\u2659' : '\u265F';
@@ -2695,6 +2761,65 @@ window.toggleDeveloperDetails = function () {
     if (!currentAuthProfile?.isDeveloper || !devOptionsOutput) return;
     devOptionsOutput.textContent = JSON.stringify(getDeveloperSnapshot());
 };
+
+function getDeveloperProfilesInRoom(state) {
+    return ['white', 'black']
+        .map((color) => state?.players?.[color]?.profile)
+        .filter((profile) => profile?.isDeveloper);
+}
+
+function showDeveloperJoinAnimation(profile) {
+    if (!profile) return;
+    const existing = document.getElementById('developer-join-burst');
+    if (existing) existing.remove();
+
+    const overlay = document.createElement('div');
+    overlay.id = 'developer-join-burst';
+    overlay.className = 'developer-join-burst';
+
+    const card = document.createElement('div');
+    card.className = 'developer-join-card';
+
+    const kicker = document.createElement('div');
+    kicker.className = 'developer-join-kicker';
+    kicker.textContent = 'Developer in game';
+
+    const title = document.createElement('div');
+    title.className = 'developer-join-title';
+    title.textContent = profile.displayName || profile.email || 'Developer';
+
+    const badge = document.createElement('span');
+    badge.className = 'developer-rank';
+    badge.textContent = '[dev] \uD83D\uDC51';
+    title.appendChild(badge);
+
+    const subtitle = document.createElement('div');
+    subtitle.className = 'developer-join-subtitle';
+    subtitle.textContent = 'Special dev match detected.';
+
+    card.appendChild(kicker);
+    card.appendChild(title);
+    card.appendChild(subtitle);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+
+    window.setTimeout(() => {
+        overlay.remove();
+    }, 2900);
+}
+
+function maybeShowDeveloperJoinAnimation(state) {
+    const developerProfiles = getDeveloperProfilesInRoom(state);
+    if (!developerProfiles.length) return;
+    const developerKey = developerProfiles
+        .map((profile) => profile.userId || profile.email || profile.displayName || 'developer')
+        .sort()
+        .join('|');
+    const roomKey = `${state?.id || onlineRoomId || 'room'}:${developerKey}`;
+    if (roomKey === lastDeveloperJoinAnimationKey) return;
+    lastDeveloperJoinAnimationKey = roomKey;
+    showDeveloperJoinAnimation(developerProfiles[0]);
+}
 
 function computeMatchRecordKey(mode, result, reason) {
     return [mode, result, reason, game.pgn(), onlineRoomId || 'local'].join('|');
